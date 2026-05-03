@@ -3,6 +3,98 @@
 (function() {
     console.log("TVBOT Bootstrap Defaults & Safety features loaded");
 
+    // Inject Premium UI CSS Overrides
+    const premiumCss = `
+        /* Modern Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Control Panel & Layer Panel Glassmorphism */
+        .control-plane, .layer-plane, #app > div {
+            background: rgba(255, 255, 255, 0.85) !important;
+            backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.4) !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08) !important;
+            border-radius: 16px !important;
+        }
+        
+        /* Buttons */
+        .btn-xiaochi, .mybutton {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            border: none !important;
+            border-radius: 8px !important;
+            color: white !important;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+            transition: all 0.3s ease !important;
+        }
+        .btn-xiaochi:hover, .mybutton:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4) !important;
+        }
+        
+        /* Inputs */
+        input[type="text"], input[type="number"], select {
+            border-radius: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            padding: 6px 12px !important;
+            transition: border-color 0.2s !important;
+        }
+        input:focus, select:focus {
+            border-color: #10b981 !important;
+            outline: none !important;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+        }
+        
+        /* Global Background */
+        body {
+            background-color: #f8fafc !important;
+        }
+        #svg-div {
+            background: #f8fafc !important;
+        }
+        svg {
+            background: white !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05) !important;
+            margin: 20px !important;
+        }
+        
+        /* Top UI Restyling */
+        #tvbot-top-ui {
+            background: rgba(255, 255, 255, 0.9) !important;
+            backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255,255,255,0.5) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) !important;
+            padding: 10px 15px !important;
+            gap: 12px !important;
+        }
+        #tvbot-back-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            border-radius: 8px !important;
+            padding: 8px 16px !important;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+        }
+        #tvbot-back-btn:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4) !important;
+        }
+        
+        /* Tool wrappers inside Top UI */
+        #tvbot-top-ui > div {
+            border: 1px solid #e2e8f0 !important;
+            background: white !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02) !important;
+            padding: 6px 12px !important;
+        }
+    `;
+    const styleEl = document.createElement('style');
+    styleEl.innerHTML = premiumCss;
+    document.head.appendChild(styleEl);
+
     // Prevent accidental page closing
     window.addEventListener('beforeunload', function (e) {
         try {
@@ -2173,19 +2265,8 @@
         return bestDist <= 18 ? best : null;
     }
 
-    function findBranchElementFromStyle(svg, item) {
-        if (!svg || !item) return null;
-        const root = getTreeSvgRoot(svg) || svg;
-        const candidates = Array.from(root.querySelectorAll('path,line,polyline,polygon')).filter(isBranchSvgElement);
-        if (item.sig) {
-            const exact = candidates.find(el => getElementSignature(el) === item.sig);
-            if (exact) return exact;
-        }
-        if (Number.isFinite(item.clientX) && Number.isFinite(item.clientY)) {
-            return findNearestBranchElement(svg, item.clientX, item.clientY);
-        }
-        return null;
-    }
+    // Removed findBranchElementFromStyle to fix DOM element signature staleness
+    // Using branchElMap directly is more robust and accurate.
 
     function getBranchElementEndpointsInRoot(el) {
         if (!el) return null;
@@ -2224,27 +2305,67 @@
         if (!nodes.length || !candidates.length) return new Map();
 
         const nodeToEl = new Map();
-
-        // 1. D3 data binding matching (most stable if available)
         let usedEl = new Set();
+        let needsGeometricMatch = false;
+
+        // 1. D3 data binding matching or cached attribute
         candidates.forEach((el, idx) => {
             const d = el.__data__;
+            let realIdx = null;
             if (d && d.target && d.target.data && d.target.data.nodeIndex != null) {
-                nodeToEl.set(String(d.target.data.nodeIndex), el);
-                usedEl.add(idx);
+                realIdx = String(d.target.data.nodeIndex);
             } else if (d && d.data && d.data.nodeIndex != null) {
-                nodeToEl.set(String(d.data.nodeIndex), el);
+                realIdx = String(d.data.nodeIndex);
+            }
+
+            const cachedIdx = el.getAttribute('data-tvbot-branch-node-index');
+            
+            // Check if DOM element was recycled by D3 for a different node
+            if (realIdx && cachedIdx && realIdx !== cachedIdx) {
+                // Clear old custom styles because the element is reused
+                el.removeAttribute('data-tvbot-branch-styled');
+                el.style.removeProperty('stroke');
+                el.style.removeProperty('stroke-width');
+                el.style.removeProperty('stroke-opacity');
+                el.removeAttribute('stroke');
+                el.removeAttribute('stroke-width');
+                el.removeAttribute('stroke-opacity');
+                
+                // Restore orig styles if we saved them
+                const origStroke = el.getAttribute('data-tvbot-orig-stroke');
+                if (origStroke) {
+                    if (origStroke !== '__TVBOT_NULL__') el.setAttribute('stroke', origStroke);
+                    else el.removeAttribute('stroke');
+                }
+                const origWidth = el.getAttribute('data-tvbot-orig-stroke-width');
+                if (origWidth) {
+                    if (origWidth !== '__TVBOT_NULL__') el.setAttribute('stroke-width', origWidth);
+                    else el.removeAttribute('stroke-width');
+                }
+            }
+
+            if (realIdx) {
+                nodeToEl.set(realIdx, el);
+                if (realIdx !== cachedIdx) el.setAttribute('data-tvbot-branch-node-index', realIdx);
                 usedEl.add(idx);
+            } else if (cachedIdx) {
+                // If no D3 data, trust the cache
+                nodeToEl.set(cachedIdx, el);
+                usedEl.add(idx);
+            } else {
+                needsGeometricMatch = true;
             }
         });
 
-        if (nodeToEl.size > 0) return nodeToEl;
+        // If we found a mapping for most candidates, return it.
+        // Also if we don't need geometric matching, we are done.
+        if (!needsGeometricMatch || nodeToEl.size >= Math.min(nodes.length, candidates.length) * 0.9) return nodeToEl;
 
-        // 2. Internal geometric matching (zoom-independent)
+        // 2. Internal geometric matching (zoom-independent) - ONLY RUN IF NEEDED
         const pairs = [];
         nodes.forEach(node => {
             const nodeIndex = String(node.data && node.data.nodeIndex != null ? node.data.nodeIndex : '');
-            if (!nodeIndex) return;
+            if (!nodeIndex || nodeToEl.has(nodeIndex)) return;
             const parent = node.parent;
             if (!parent) return;
             
@@ -2280,7 +2401,9 @@
         pairs.forEach(pair => {
             if (nodeToEl.has(pair.nodeIndex) || usedEl.has(pair.elIndex)) return;
             if (pair.dist > 15) return; // Must be close to an endpoint
-            nodeToEl.set(pair.nodeIndex, candidates[pair.elIndex]);
+            const el = candidates[pair.elIndex];
+            nodeToEl.set(pair.nodeIndex, el);
+            el.setAttribute('data-tvbot-branch-node-index', pair.nodeIndex);
             usedEl.add(pair.elIndex);
         });
 
@@ -2498,16 +2621,7 @@
 
         branchArr.forEach(item => {
             if (!item) return;
-            const node = getTreeNodeByIndex(app, item.nodeIndex);
-            let realItem = item;
-            if ((!realItem.sig || !Number.isFinite(realItem.clientX) || !Number.isFinite(realItem.clientY)) && node) {
-                const probe = getBranchProbeClientPoint(node);
-                realItem = Object.assign({}, item, {
-                    clientX: probe && Number.isFinite(probe.x) ? probe.x : item.clientX,
-                    clientY: probe && Number.isFinite(probe.y) ? probe.y : item.clientY
-                });
-            }
-            const el = findBranchElementFromStyle(svg, realItem) || branchElMap.get(String(item.nodeIndex));
+            const el = branchElMap.get(String(item.nodeIndex));
             if (!el) return;
             applyBranchStyleToElement(el, item);
         });
