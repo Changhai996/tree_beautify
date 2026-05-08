@@ -111,6 +111,27 @@
             font-weight: 600 !important;
             color: #2d3748 !important;
             letter-spacing: 0.5px !important;
+            min-height: 30px !important;
+            line-height: 1.5 !important;
+            padding-top: 2px !important;
+            padding-bottom: 2px !important;
+        }
+        #project-manager-box select {
+            min-height: 30px !important;
+            line-height: 1.5 !important;
+            padding-top: 2px !important;
+            padding-bottom: 2px !important;
+            min-width: 180px !important;
+        }
+        
+        /* Canvas Resize Handles Visibility */
+        #scale-right, #margin-right, #margin-left, #margin-top, #margin-bottom, #scale-bottom, #scale-se {
+            background-color: rgba(102, 194, 165, 0.2) !important;
+            border-radius: 4px;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        #scale-right:hover, #margin-right:hover, #margin-left:hover, #margin-top:hover, #margin-bottom:hover, #scale-bottom:hover, #scale-se:hover {
+            background-color: rgba(102, 194, 165, 0.6) !important;
         }
 
         /* Right Panel Compactness */
@@ -314,13 +335,10 @@
         select.onchange = (e) => {
             const val = e.target.value;
             // Sync to native Project Manager if it exists
-            const el = document.getElementById('project-manager-box');
-            if (el && (el.__vue_app__ || el.__vue__)) {
-                const app = el.__vue_app__ ? el.__vue_app__._instance.proxy : el.__vue__;
-                if (app && app.projectList) {
-                    const idx = app.projectList.findIndex(p => p.projectId === val);
-                    if (idx !== -1) app.currentProjectIndex = idx;
-                }
+            const app = getProjectManagerVueApp();
+            if (app && app.projectList) {
+                const idx = app.projectList.findIndex(p => p.projectId === val);
+                if (idx !== -1) app.currentProjectIndex = idx;
             }
         };
 
@@ -424,10 +442,7 @@
                     return;
                 }
 
-                const pmEl = document.getElementById('project-manager-box');
-                const pmApp = (pmEl && (pmEl.__vue_app__ || pmEl.__vue__))
-                    ? (pmEl.__vue_app__ ? pmEl.__vue_app__._instance.proxy : pmEl.__vue__)
-                    : null;
+                const pmApp = getProjectManagerVueApp();
                 const projectId = pmApp && pmApp.projectList && pmApp.currentProjectIndex !== undefined
                     ? (pmApp.projectList[pmApp.currentProjectIndex] && pmApp.projectList[pmApp.currentProjectIndex].projectId)
                     : (document.getElementById('global-project-select') ? document.getElementById('global-project-select').value : 'default');
@@ -714,9 +729,15 @@
   font-size: 12px !important;
 }
 #project-manager-box input, #project-manager-box select {
-  min-height: 24px !important;
-  height: 24px !important;
-  line-height: 24px !important;
+  min-height: 30px !important;
+  height: 30px !important;
+  line-height: 1.5 !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+#project-manager-box select {
+  min-width: 180px !important;
+  max-width: 300px !important;
 }
 #project-manager-box input {
   min-width: 500px !important;
@@ -1224,10 +1245,7 @@
                         return s;
                     };
 
-                    const pmEl = document.getElementById('project-manager-box');
-                    const pmApp = (pmEl && (pmEl.__vue_app__ || pmEl.__vue__))
-                        ? (pmEl.__vue_app__ ? pmEl.__vue_app__._instance.proxy : pmEl.__vue__)
-                        : null;
+                    const pmApp = getProjectManagerVueApp();
 
                     let pmProjectId = null;
                     if (pmApp && pmApp.projectList && pmApp.currentProjectIndex !== undefined) {
@@ -1388,186 +1406,47 @@
                 doc.__tvbot_embedFontFamily = null;
             }
         };
-        const parseFirstNumber = (v) => {
-            if (v == null) return 0;
-            const s = String(v).trim();
-            if (!s) return 0;
-            const parts = s.split(/[\s,]+/);
-            const n = parseFloat(parts[0]);
-            return Number.isFinite(n) ? n : 0;
-        };
-        const parseColor = (c) => {
-            if (!c) return null;
-            const s = String(c).trim().toLowerCase();
-            if (s === 'none' || s === 'transparent') return null;
-            const rgb = s.match(/^rgb\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/);
-            if (rgb) return { r: Math.round(parseFloat(rgb[1])), g: Math.round(parseFloat(rgb[2])), b: Math.round(parseFloat(rgb[3])) };
-            const rgba = s.match(/^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/);
-            if (rgba) {
-                const a = parseFloat(rgba[4]);
-                if (!Number.isFinite(a) || a <= 0) return null;
-                return { r: Math.round(parseFloat(rgba[1])), g: Math.round(parseFloat(rgba[2])), b: Math.round(parseFloat(rgba[3])) };
-            }
-            const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-            if (hex) {
-                let h = hex[1];
-                if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
-                return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
-            }
-            return null;
-        };
-        const getUnitsPerPx = () => {
-            const ctm = svgElement.getScreenCTM && svgElement.getScreenCTM();
-            if (!ctm || !ctm.inverse) return 1;
-            const inv = ctm.inverse();
-            const p0 = svgElement.createSVGPoint();
-            p0.x = 0; p0.y = 0;
-            const p1 = svgElement.createSVGPoint();
-            p1.x = 1; p1.y = 0;
-            const p2 = svgElement.createSVGPoint();
-            p2.x = 0; p2.y = 1;
-            const u0 = p0.matrixTransform(inv);
-            const u1 = p1.matrixTransform(inv);
-            const u2 = p2.matrixTransform(inv);
-            const dx = Math.abs(u1.x - u0.x);
-            const dy = Math.abs(u2.y - u0.y);
-            return { x: dx > 0 ? dx : 1, y: dy > 0 ? dy : 1 };
-        };
-        const unitsPerPx = getUnitsPerPx();
-        const getUserPoint = (textEl) => {
-            const svgCTM = svgElement.getScreenCTM && svgElement.getScreenCTM();
-            const nodeCTM = textEl.getScreenCTM && textEl.getScreenCTM();
-            if (!svgCTM || !nodeCTM || !svgCTM.inverse) return null;
-            const inv = svgCTM.inverse();
-            const x0 = parseFirstNumber(textEl.getAttribute('x')) + parseFirstNumber(textEl.getAttribute('dx'));
-            const y0 = parseFirstNumber(textEl.getAttribute('y')) + parseFirstNumber(textEl.getAttribute('dy'));
-            const p = svgElement.createSVGPoint();
-            p.x = x0;
-            p.y = y0;
-            const pScreen = p.matrixTransform(nodeCTM);
-            const pUser = pScreen.matrixTransform(inv);
-            return { x: pUser.x, y: pUser.y };
-        };
-        const getFontSizeUserUnits = (textEl) => {
-            const attr = textEl.getAttribute('font-size');
-            if (attr) {
-                const n = parseFloat(attr);
-                if (Number.isFinite(n)) return n;
-            }
-            const styleAttr = textEl.getAttribute('style') || '';
-            const m = styleAttr.match(/font-size\s*:\s*([^;]+)/i);
-            if (m && m[1]) {
-                const raw = m[1].trim();
-                const n = parseFloat(raw);
-                if (!Number.isFinite(n)) return 12;
-                if (/[a-z%]+$/i.test(raw)) return n * unitsPerPx.y;
-                return n;
-            }
-            const cs = window.getComputedStyle ? window.getComputedStyle(textEl) : null;
-            const px = cs && cs.fontSize ? parseFloat(cs.fontSize) : NaN;
-            return Number.isFinite(px) ? px * unitsPerPx.y : 12;
-        };
-        const getTextPaint = (textEl) => {
-            const cs = window.getComputedStyle ? window.getComputedStyle(textEl) : null;
-            const fill = cs ? cs.fill : (textEl.getAttribute('fill') || '');
-            const c = parseColor(fill);
-            const opacity = cs && cs.opacity ? parseFloat(cs.opacity) : NaN;
-            if (Number.isFinite(opacity) && opacity <= 0) return null;
-            const vis = cs ? cs.visibility : '';
-            const disp = cs ? cs.display : '';
-            if (vis === 'hidden' || disp === 'none') return null;
-            return {
-                color: c || { r: 0, g: 0, b: 0 },
-                fontStyle: cs ? cs.fontStyle : '',
-                fontWeight: cs ? cs.fontWeight : '',
-                fontFamily: cs ? cs.fontFamily : '',
-                textAnchor: cs ? cs.textAnchor : (textEl.getAttribute('text-anchor') || '')
-            };
-        };
-        const getDesiredTextWidthUserUnits = (textEl) => {
-            if (textEl.getBoundingClientRect) {
-                const r = textEl.getBoundingClientRect();
-                if (r && Number.isFinite(r.width) && r.width > 0) return r.width * unitsPerPx.x;
-            }
-            return null;
-        };
-        const mapToPdfFont = (fontFamily) => {
-            const s = String(fontFamily || '').toLowerCase();
-            if (!s) return 'helvetica';
-            if (s.includes('courier') || s.includes('monospace') || s.includes('consolas') || s.includes('menlo')) return 'courier';
-            if (s.includes('times') || s.includes('serif')) return 'times';
-            if (s.includes('arial') || s.includes('helvetica') || s.includes('sans')) return 'helvetica';
-            return 'helvetica';
-        };
-
-        const allTexts = Array.from(svgElement.querySelectorAll('text'));
-        const textDrawOps = [];
-        allTexts.forEach(t => {
-            const txt = t.textContent != null ? String(t.textContent) : '';
-            if (!txt.trim()) return;
-            const paint = getTextPaint(t);
-            if (!paint) return;
-            const pos = getUserPoint(t);
-            if (!pos) return;
-            const fs = getFontSizeUserUnits(t);
-            const desiredWidth = getDesiredTextWidthUserUnits(t);
-            const alignRaw = String(paint.textAnchor || '').toLowerCase();
-            const align = alignRaw === 'middle' ? 'center' : (alignRaw === 'end' ? 'right' : 'left');
-            textDrawOps.push({
-                text: txt,
-                x: pos.x,
-                y: pos.y,
-                fontSize: fs,
-                color: paint.color,
-                fontStyle: paint.fontStyle,
-                fontWeight: paint.fontWeight,
-                fontFamily: paint.fontFamily,
-                desiredWidth: desiredWidth,
-                align: align
-            });
-        });
 
         const exportSvg = svgElement.cloneNode(true);
         if (!exportSvg.getAttribute('xmlns')) exportSvg.setAttribute('xmlns', svgNS);
-        const textInClone = exportSvg.querySelectorAll('text');
-        textInClone.forEach(t => t.setAttribute('display', 'none'));
+
+        // Inline computed styles so svg2pdf renders text, colors, and strokes perfectly
+        const originalNodes = Array.from(svgElement.querySelectorAll('*'));
+        const cloneNodes = Array.from(exportSvg.querySelectorAll('*'));
+        
+        for (let i = 0; i < originalNodes.length; i++) {
+            const orig = originalNodes[i];
+            const clone = cloneNodes[i];
+            const cs = window.getComputedStyle(orig);
+            if (cs) {
+                const tag = orig.tagName.toLowerCase();
+                if (tag === 'text' || tag === 'tspan') {
+                    if (!clone.getAttribute('font-family')) clone.setAttribute('font-family', cs.fontFamily);
+                    if (!clone.getAttribute('font-size')) clone.setAttribute('font-size', cs.fontSize);
+                    if (!clone.getAttribute('font-weight')) clone.setAttribute('font-weight', cs.fontWeight);
+                    if (!clone.getAttribute('font-style')) clone.setAttribute('font-style', cs.fontStyle);
+                    if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
+                    if (!clone.getAttribute('text-anchor')) clone.setAttribute('text-anchor', cs.textAnchor || orig.getAttribute('text-anchor'));
+                } else if (tag === 'path' || tag === 'line' || tag === 'rect' || tag === 'circle' || tag === 'polygon') {
+                    if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
+                    if (!clone.getAttribute('stroke')) clone.setAttribute('stroke', cs.stroke);
+                    if (!clone.getAttribute('stroke-width')) clone.setAttribute('stroke-width', cs.strokeWidth);
+                    if (!clone.getAttribute('stroke-dasharray') && cs.strokeDasharray !== 'none') clone.setAttribute('stroke-dasharray', cs.strokeDasharray);
+                }
+                if (!clone.getAttribute('opacity') && cs.opacity !== '1') clone.setAttribute('opacity', cs.opacity);
+                if (!clone.getAttribute('display') && cs.display === 'none') clone.setAttribute('display', cs.display);
+                if (!clone.getAttribute('visibility') && cs.visibility === 'hidden') clone.setAttribute('visibility', cs.visibility);
+            }
+        }
 
         await ensureEmbeddedFonts();
+        
+        // Force the preferred font on the root if possible
+        if (doc.__tvbot_embedFontFamily) {
+            exportSvg.setAttribute('font-family', doc.__tvbot_embedFontFamily);
+        }
+
         return doc.svg(exportSvg, { width: width, height: height }).then(() => {
-            const fontList = doc.getFontList ? doc.getFontList() : {};
-            textDrawOps.forEach(op => {
-                doc.setTextColor(op.color.r, op.color.g, op.color.b);
-                let style = 'normal';
-                const w = String(op.fontWeight || '').toLowerCase();
-                const isBold = w === 'bold' || parseInt(w) >= 700;
-                const isItalic = String(op.fontStyle || '').toLowerCase().includes('italic');
-                if (isBold && isItalic) style = 'bolditalic';
-                else if (isBold) style = 'bold';
-                else if (isItalic) style = 'italic';
-                const preferred = doc.__tvbot_embedFontFamily || null;
-                const baseFont = preferred || mapToPdfFont(op.fontFamily);
-                const hasFont = !!fontList[baseFont];
-                try {
-                    doc.setFont(hasFont ? baseFont : 'helvetica', style);
-                } catch (e) {
-                    doc.setFont(hasFont ? baseFont : 'helvetica', 'normal');
-                }
-                doc.setFontSize(op.fontSize);
-                if (typeof doc.setCharSpace === 'function') {
-                    doc.setCharSpace(0);
-                    const glyphCount = Array.from(op.text).length;
-                    if (glyphCount > 1 && Number.isFinite(op.desiredWidth) && op.desiredWidth > 0) {
-                        const currentW = doc.getTextWidth(op.text);
-                        const diff = op.desiredWidth - currentW;
-                        if (diff > 0.2) {
-                            const cs = diff / (glyphCount - 1);
-                            if (Number.isFinite(cs) && cs > 0) doc.setCharSpace(cs);
-                        }
-                    }
-                }
-                doc.text(op.text, op.x, op.y, { align: op.align });
-                if (typeof doc.setCharSpace === 'function') doc.setCharSpace(0);
-            });
             doc.save(fileName + ".pdf");
             return { data: { success: true } };
         });
@@ -1590,7 +1469,37 @@
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
             
-            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const exportSvg = svgElement.cloneNode(true);
+            if (!exportSvg.getAttribute('xmlns')) exportSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            
+            const originalNodes = Array.from(svgElement.querySelectorAll('*'));
+            const cloneNodes = Array.from(exportSvg.querySelectorAll('*'));
+            for (let i = 0; i < originalNodes.length; i++) {
+                const orig = originalNodes[i];
+                const clone = cloneNodes[i];
+                const cs = window.getComputedStyle(orig);
+                if (cs) {
+                    const tag = orig.tagName.toLowerCase();
+                    if (tag === 'text' || tag === 'tspan') {
+                        if (!clone.getAttribute('font-family')) clone.setAttribute('font-family', cs.fontFamily);
+                        if (!clone.getAttribute('font-size')) clone.setAttribute('font-size', cs.fontSize);
+                        if (!clone.getAttribute('font-weight')) clone.setAttribute('font-weight', cs.fontWeight);
+                        if (!clone.getAttribute('font-style')) clone.setAttribute('font-style', cs.fontStyle);
+                        if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
+                        if (!clone.getAttribute('text-anchor')) clone.setAttribute('text-anchor', cs.textAnchor || orig.getAttribute('text-anchor'));
+                    } else if (tag === 'path' || tag === 'line' || tag === 'rect' || tag === 'circle' || tag === 'polygon') {
+                        if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
+                        if (!clone.getAttribute('stroke')) clone.setAttribute('stroke', cs.stroke);
+                        if (!clone.getAttribute('stroke-width')) clone.setAttribute('stroke-width', cs.strokeWidth);
+                        if (!clone.getAttribute('stroke-dasharray') && cs.strokeDasharray !== 'none') clone.setAttribute('stroke-dasharray', cs.strokeDasharray);
+                    }
+                    if (!clone.getAttribute('opacity') && cs.opacity !== '1') clone.setAttribute('opacity', cs.opacity);
+                    if (!clone.getAttribute('display') && cs.display === 'none') clone.setAttribute('display', cs.display);
+                    if (!clone.getAttribute('visibility') && cs.visibility === 'hidden') clone.setAttribute('visibility', cs.visibility);
+                }
+            }
+
+            const svgData = new XMLSerializer().serializeToString(exportSvg);
             const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
             const url = URL.createObjectURL(svgBlob);
             
@@ -1637,6 +1546,17 @@
             if (!existing) document.head.appendChild(script);
         });
         return cache[src];
+    }
+
+    function getProjectManagerVueApp() {
+        const pmEl = document.getElementById('project-manager-app') || document.getElementById('project-manager-box');
+        if (!pmEl) return null;
+        if (pmEl.__vue_app__) {
+            const proxy = pmEl.__vue_app__._instance.proxy;
+            return (proxy.$refs && proxy.$refs.projectManager) ? proxy.$refs.projectManager : proxy;
+        }
+        if (pmEl.__vue__) return pmEl.__vue__;
+        return null;
     }
 
     async function ensurePdfLibraries() {
@@ -1701,10 +1621,16 @@
             return [];
         };
         const getProjectId = () => {
-            const pmEl = document.getElementById('project-manager-box');
-            const pmApp = (pmEl && (pmEl.__vue_app__ || pmEl.__vue__))
-                ? (pmEl.__vue_app__ ? pmEl.__vue_app__._instance.proxy : pmEl.__vue__)
-                : null;
+            const pmEl = document.getElementById('project-manager-app') || document.getElementById('project-manager-box');
+            let pmApp = null;
+            if (pmEl) {
+                if (pmEl.__vue_app__) {
+                    pmApp = pmEl.__vue_app__._instance.proxy.$refs ? pmEl.__vue_app__._instance.proxy.$refs.projectManager : pmEl.__vue_app__._instance.proxy;
+                    if (!pmApp) pmApp = pmEl.__vue_app__._instance.proxy;
+                } else if (pmEl.__vue__) {
+                    pmApp = pmEl.__vue__;
+                }
+            }
             if (pmApp && pmApp.projectList && pmApp.currentProjectIndex !== undefined) {
                 const current = pmApp.projectList[pmApp.currentProjectIndex];
                 if (current && current.projectId) return String(current.projectId);
@@ -1715,10 +1641,7 @@
             return 'default';
         };
         const getTreeTitle = () => {
-            const pmEl = document.getElementById('project-manager-box');
-            const pmApp = (pmEl && (pmEl.__vue_app__ || pmEl.__vue__))
-                ? (pmEl.__vue_app__ ? pmEl.__vue_app__._instance.proxy : pmEl.__vue__)
-                : null;
+            const pmApp = getProjectManagerVueApp();
             if (pmApp && pmApp.treeTitle) return String(pmApp.treeTitle);
             if (app.figureData && app.figureData.export && app.figureData.export["Save figure"]) {
                 const v = app.figureData.export["Save figure"].fileName.value;
@@ -3257,10 +3180,7 @@
                     return;
                 }
 
-                const pmEl = document.getElementById('project-manager-box');
-                const pmApp = (pmEl && (pmEl.__vue_app__ || pmEl.__vue__))
-                    ? (pmEl.__vue_app__ ? pmEl.__vue_app__._instance.proxy : pmEl.__vue__)
-                    : null;
+                const pmApp = getProjectManagerVueApp();
                 const projectId = pmApp && pmApp.projectList && pmApp.currentProjectIndex !== undefined
                     ? (pmApp.projectList[pmApp.currentProjectIndex] && pmApp.projectList[pmApp.currentProjectIndex].projectId)
                     : (new URLSearchParams(window.location.search).get('projectId') || 'default');
@@ -3379,10 +3299,7 @@
         cpSelect.appendChild(cpPlaceholder);
 
         const resolveProjectId = () => {
-            const pmEl = document.getElementById('project-manager-box');
-            const pmApp = (pmEl && (pmEl.__vue_app__ || pmEl.__vue__))
-                ? (pmEl.__vue_app__ ? pmEl.__vue_app__._instance.proxy : pmEl.__vue__)
-                : null;
+            const pmApp = getProjectManagerVueApp();
             if (pmApp && pmApp.projectList && pmApp.currentProjectIndex !== undefined) {
                 const current = pmApp.projectList[pmApp.currentProjectIndex];
                 if (current && current.projectId) return String(current.projectId);
@@ -3391,10 +3308,7 @@
             return String(params.get('projectId') || 'default');
         };
         const resolveTreeTitle = () => {
-            const pmEl = document.getElementById('project-manager-box');
-            const pmApp = (pmEl && (pmEl.__vue_app__ || pmEl.__vue__))
-                ? (pmEl.__vue_app__ ? pmEl.__vue_app__._instance.proxy : pmEl.__vue__)
-                : null;
+            const pmApp = getProjectManagerVueApp();
             if (pmApp && pmApp.treeTitle) return String(pmApp.treeTitle);
             const app = window.normalTree || window.circleTree || window.unrootedTree;
             if (app && app.figureData && app.figureData.export && app.figureData.export["Save figure"]) {
@@ -3845,16 +3759,13 @@
                 }
                 
                 // 1. Sync to project manager immediately
-                const el = document.getElementById('project-manager-box');
-                if (el && (el.__vue_app__ || el.__vue__)) {
-                    const vueApp = el.__vue_app__ ? el.__vue_app__._instance.proxy : el.__vue__;
-                    if (vueApp) {
-                        vueApp.treeTitle = lastLoadedFilename;
-                        console.log("Synced treeTitle to Vue:", lastLoadedFilename);
+                const vueApp = getProjectManagerVueApp();
+                if (vueApp) {
+                    vueApp.treeTitle = lastLoadedFilename;
+                    console.log("Synced treeTitle to Vue:", lastLoadedFilename);
                         
-                        // Force Vue to update and propagate the change
-                        if (vueApp.$forceUpdate) vueApp.$forceUpdate();
-                    }
+                    // Force Vue to update and propagate the change
+                    if (vueApp.$forceUpdate) vueApp.$forceUpdate();
                 }
 
                 // 2. Sync to figureData export name if available
@@ -3996,8 +3907,9 @@
 
         // Initial sync if treeTitle is in URL
         const params = new URLSearchParams(window.location.search);
-        const urlTitle = params.get('treeTitle');
+        let urlTitle = params.get('treeTitle');
         if (urlTitle) {
+            urlTitle = urlTitle.replace(/\.[^/.]+$/, "");
             if (app.figureData && app.figureData.export && app.figureData.export["Save figure"]) {
                 app.figureData.export["Save figure"].fileName.value = urlTitle;
             }
@@ -4022,12 +3934,14 @@
     // Patch the native Project Manager UI
     function patchProjectManager() {
         const checkVue = setInterval(() => {
-            const el = document.getElementById('project-manager-box');
-            // Check for Vue 3 app or Vue 2 instance
-            if (el && (el.__vue_app__ || el.__vue__)) {
+            const app = getProjectManagerVueApp();
+            if (app) {
                 clearInterval(checkVue);
                 console.log("Patching native project manager UI");
                 
+                const el = document.getElementById('project-manager-app') || document.getElementById('project-manager-box');
+                if (!el) return;
+
                 // 1. Add "New Project" and "Delete Project" buttons
                 const projectSelect = el.querySelector('select');
                 if (projectSelect && !document.getElementById('local-project-controls')) {
@@ -4141,12 +4055,15 @@
                 // 2. Try to sync current project and title
                 const params = new URLSearchParams(window.location.search);
                 const urlProjectId = params.get('projectId');
-                const urlTreeTitle = params.get('treeTitle');
+                let urlTreeTitle = params.get('treeTitle');
+                if (urlTreeTitle) {
+                    urlTreeTitle = urlTreeTitle.replace(/\.[^/.]+$/, "");
+                }
                 
                 // Periodically check and sync until it takes effect
                 let syncCount = 0;
                 const syncInterval = setInterval(() => {
-                    const app = el.__vue_app__ ? el.__vue_app__._instance.proxy : el.__vue__;
+                    const app = getProjectManagerVueApp();
                     if (app) {
                         let changed = false;
                         // Sync Project
@@ -4220,7 +4137,38 @@
         }, 300);
         checkAndPatch();
         patchProjectManager();
+        handleAutoUpload();
     });
+
+    function handleAutoUpload() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('autoUpload') === '1') {
+            const checkReady = setInterval(() => {
+                const app = window.normalTree || window.circleTree || window.unrootedTree;
+                if (app && app.onLoadNewFile) {
+                    clearInterval(checkReady);
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.json,.nwk,.tre,.nexus,.nex,.txt';
+                    input.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (re) => {
+                            try {
+                                app.onLoadNewFile(re.target.result, 'local', [file.name]);
+                            } catch (err) {
+                                alert("Failed to import tree: " + err.message);
+                            }
+                        };
+                        reader.readAsText(file);
+                    };
+                    // Use a small delay to ensure DOM is fully interactive before clicking
+                    setTimeout(() => input.click(), 100);
+                }
+            }, 500);
+        }
+    }
 
     // Handle automatic export if requested via URL params
     async function handleAutoExport() {

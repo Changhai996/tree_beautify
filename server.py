@@ -4,8 +4,14 @@ import os
 import json
 import time
 import secrets
+import logging
 from datetime import datetime
 import urllib.parse
+
+# Suppress the Flask development server warning
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+os.environ['WERKZEUG_RUN_MAIN'] = 'true'
 
 app = Flask(__name__, static_folder='src')
 CORS(app)
@@ -462,6 +468,9 @@ def render_local_my_trees():
                                 <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill fw-normal ms-2">{{ trees|length }}</span>
                             </div>
                             <div class="d-flex align-items-center gap-3" onclick="event.stopPropagation()">
+                                <a href="/normalTree.html?projectId={{ project_name }}&autoUpload=1" class="btn btn-sm btn-outline-primary py-0 px-2 text-decoration-none" title="Import Tree" style="font-size: 0.75rem;">
+                                    <i class="bi bi-upload"></i> Import Tree
+                                </a>
                                 {% if project_name.lower() != 'default' %}
                                 <button onclick="renameProject('{{ project_name }}')" class="btn btn-link text-muted p-0 text-decoration-none hover-primary" title="Rename">
                                     <i class="bi bi-pencil-square"></i>
@@ -714,7 +723,7 @@ def render_local_my_trees():
 
             async function renameTree(relPath) {
                 const base = relPath.split('/').pop() || relPath;
-                const oldStem = base.replace(/\.json$/i, '');
+                const oldStem = base.replace(/\\.json$/i, '');
                 const newStem = prompt(`Rename "${oldStem}" to:`, oldStem);
                 if (!newStem || newStem === oldStem) return;
                 try {
@@ -728,10 +737,10 @@ def render_local_my_trees():
             }
 
             async function copyTree(relPath, projectId, baseName) {
-                const defName = String(baseName || 'tree').trim().replace(/[\/:*?"<>|]/g, '_') + '_copy';
+                const defName = String(baseName || 'tree').trim().replace(/[\\/:*?"<>|]/g, '_') + '_copy';
                 const newStem = prompt('Copy as:', defName);
                 if (!newStem) return;
-                const treeName = newStem.trim().replace(/[\/:*?"<>|]/g, '_').replace(/\.json$/i, '');
+                const treeName = newStem.trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\\.json$/i, '');
                 try {
                     const srcRes = await fetch('/api/get_tree/' + encodeURIComponent(relPath).replace(/%2F/g, '/'));
                     const srcJson = await srcRes.json();
@@ -1088,5 +1097,14 @@ def svg2others():
     return "Local export handled client-side.", 501
 
 if __name__ == '__main__':
-    print("TVBOT Local Server running at http://localhost:8000")
-    app.run(debug=True, port=8000)
+    import webbrowser
+    import threading
+    
+    port = 8000
+    url = f"http://127.0.0.1:{port}/"
+    print(f"TVBOT Local Server starting at {url}")
+    
+    # Open the browser automatically after a short delay
+    threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+    
+    app.run(debug=True, port=port, use_reloader=False)

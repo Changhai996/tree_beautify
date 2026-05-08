@@ -69,6 +69,7 @@ let layer_component_T = `<div id="data-layer-container">
                 </tbody></table>
         </div>
         <div class="layer-data-choose-btn-box">
+            <div class="mybutton" style="width: 140px;height: 40px;line-height: 40px;background-color: #f39c12;margin-right:10px;" @click="foldCladeByColumn($event)">Fold by taxon</div>
             <div class="mybutton" style="width: 70px;height: 40px;line-height: 40px;" @click="addDataLyerSubmit($event)">Add</div>
         </div>
     </div>
@@ -725,6 +726,156 @@ ${optionsStr}
                     return bool
                 },
 
+                foldCladeByColumn(e) {
+                    if (this.currentChenkedColumns.length !== 1) {
+                        mainPlot.showMessageBox("cuIcon-roundclose", "Please select exactly ONE column for folding!", "error");
+                        return;
+                    }
+                    
+                    let fullData = mainPlot.layerDataDict[this.currentLayerDataFlieKey[0]].dataSource;
+                    let colName = this.layerData.columns[this.currentChenkedColumns[0]].name;
+                    let idColName = this.layerData.columns[0].name;
+
+                    function norm(s) {
+                        if (s == null) return "";
+                        return String(s).replace(/['"]/g, '').replace(/_/g, ' ').trim().toLowerCase();
+                    }
+
+                    // Build mapping: ID -> Fold Value
+                    let foldMap = {};
+                    fullData.forEach(row => {
+                        let id = row[idColName];
+                        let val = row[colName];
+                        if (id !== undefined && id !== null && val !== undefined && val !== null && String(val).trim() !== "") {
+                            let cleanVal = String(val).trim();
+                            foldMap[norm(id)] = cleanVal;
+                            foldMap[String(id).trim()] = cleanVal;
+                            foldMap[String(id).trim().toLowerCase()] = cleanVal;
+                        }
+                    });
+
+                    let cladesToFold = [];
+
+                    // Top-down traversal to find the largest monophyletic clades
+                    mainPlot.treeHierarchy.eachBefore(node => {
+                        if (node.data.isCollapse) return; // already folded manually
+                        if (node._handled) return; // ancestor already folded
+                        if (!node.children || node.children.length === 0) return; // leaf
+
+                        let leaves = node.leaves();
+                        if (leaves.length < 2) return;
+
+                        let allMatch = true;
+                        let targetTaxon = null;
+                        let annotatedCount = 0;
+
+                        for (let leaf of leaves) {
+                            let rawId = leaf.data.uniformNodeId || leaf.data.name;
+                            let leafId = norm(rawId);
+                            let exactId = String(rawId).trim();
+                            
+                            let val = foldMap[leafId] || foldMap[exactId] || foldMap[exactId.toLowerCase()];
+                            
+                            if (val) {
+                                annotatedCount++;
+                                if (targetTaxon === null) {
+                                    targetTaxon = val;
+                                } else if (targetTaxon !== val) {
+                                    allMatch = false;
+                                    break;
+                                }
+                            } else {
+                                // Strict mode: if any leaf in this clade lacks an annotation in the dataset,
+                                // we consider the clade not purely matching.
+                                // If users complain about this, we can make it an option.
+                                allMatch = false;
+                                break;
+                            }
+                        }
+
+                        if (allMatch && targetTaxon && annotatedCount > 1) {
+                            cladesToFold.push({ node: node, taxon: targetTaxon });
+                            node.each(desc => desc._handled = true);
+                        }
+                    });
+
+                    // If strict mode failed to find ANY clades, try a relaxed mode
+                    // where unannotated leaves are ignored (as long as all annotated leaves share the same taxon).
+                    if (cladesToFold.length === 0) {
+                        mainPlot.treeHierarchy.each(node => delete node._handled);
+                        
+                        mainPlot.treeHierarchy.eachBefore(node => {
+                            if (node.data.isCollapse) return;
+                            if (node._handled) return;
+                            if (!node.children || node.children.length === 0) return;
+
+                            let leaves = node.leaves();
+                            if (leaves.length < 2) return;
+
+                            let allMatch = true;
+                            let targetTaxon = null;
+                            let annotatedCount = 0;
+
+                            for (let leaf of leaves) {
+                                let rawId = leaf.data.uniformNodeId || leaf.data.name;
+                                let leafId = norm(rawId);
+                                let exactId = String(rawId).trim();
+                                
+                                let val = foldMap[leafId] || foldMap[exactId] || foldMap[exactId.toLowerCase()];
+                                
+                                if (val) {
+                                    annotatedCount++;
+                                    if (targetTaxon === null) {
+                                        targetTaxon = val;
+                                    } else if (targetTaxon !== val) {
+                                        allMatch = false;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // In relaxed mode, require at least 50% of the clade to be annotated
+                            // to prevent folding huge background clades based on 2 leaves.
+                            if (allMatch && targetTaxon && annotatedCount > 1 && (annotatedCount / leaves.length) >= 0.5) {
+                                cladesToFold.push({ node: node, taxon: targetTaxon });
+                                node.each(desc => desc._handled = true);
+                            }
+                        });
+                    }
+
+                    let foldCount = 0;
+                    if (!mainPlot.styleData.collapseCladeList) {
+                        mainPlot.styleData.collapseCladeList = [];
+                    }
+
+                    cladesToFold.forEach(item => {
+                        let node = item.node;
+                        let exists = mainPlot.styleData.collapseCladeList.find(c => c.nodeIndex === node.data.nodeIndex);
+                        if (!exists) {
+                            mainPlot.styleData.collapseCladeList.push({
+                                nodeIndex: node.data.nodeIndex,
+                                newNodeID: item.taxon
+                            });
+                        }
+                        foldCount++;
+                    });
+
+                    // Cleanup temporary properties
+                    mainPlot.treeHierarchy.each(node => delete node._handled);
+
+                    if (foldCount > 0) {
+                        if (mainPlot.styleData.rootNodeIndex) {
+                            mainPlot.reRootTree(mainPlot.styleData.rootNodeIndex, mainPlot.styleData.rootOffsetRate);
+                        } else {
+                            mainPlot.reRootTree();
+                        }
+                        mainPlot.showMessageBox("cuIcon-roundcheck", `Successfully folded ${foldCount} clades based on ${colName}.`, "success");
+                    } else {
+                        mainPlot.showMessageBox("cuIcon-info", "No monophyletic clades found. Check if leaf names match dataset IDs.", "error");
+                    }
+                    
+                    this.hideLayerDataChooseBox();
+                },
                 addDataLyerSubmit(e,layerStatistic, layerListItem){
                     let layerType = this.layerTypeList[this.layerTypeIndex]
                     let categoryList =  []
