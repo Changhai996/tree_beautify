@@ -2928,6 +2928,15 @@
 
         document.body.appendChild(picker);
 
+        // Auto-adjust if it goes off screen
+        const pickerRect = picker.getBoundingClientRect();
+        if (pickerRect.bottom > window.innerHeight) {
+            picker.style.top = `${Math.max(10, window.innerHeight - pickerRect.height - 10)}px`;
+        }
+        if (pickerRect.right > window.innerWidth) {
+            picker.style.left = `${Math.max(10, window.innerWidth - pickerRect.width - 10)}px`;
+        }
+
         // Click outside to close
         setTimeout(() => {
             const closePicker = (e) => {
@@ -2940,9 +2949,52 @@
         }, 10);
     }
 
+    function autoAdjustContextMenuPosition() {
+        const menu = document.getElementById('tree-structure-change-btn-box');
+        if (!menu || menu.__tvbot_pos_observer) return;
+        
+        const observer = new MutationObserver((mutations) => {
+            if (menu.__tvbot_adjusting) return;
+            for (let m of mutations) {
+                if (m.type === 'attributes' && m.attributeName === 'style') {
+                    if (menu.style.display !== 'none') {
+                        menu.__tvbot_adjusting = true;
+                        menu.style.transform = 'none';
+                        const rect = menu.getBoundingClientRect();
+                        const overflowY = rect.bottom - window.innerHeight;
+                        const overflowX = rect.right - window.innerWidth;
+                        
+                        let tx = 0;
+                        let ty = 0;
+                        
+                        if (overflowY > 0) {
+                            ty = -(overflowY + 20);
+                        }
+                        if (overflowX > 0) {
+                            tx = -(overflowX + 20);
+                        }
+                        
+                        if (tx !== 0 || ty !== 0) {
+                            menu.style.transform = `translate(${tx}px, ${ty}px)`;
+                        }
+                        
+                        requestAnimationFrame(() => {
+                            menu.__tvbot_adjusting = false;
+                        });
+                    }
+                }
+            }
+        });
+        
+        observer.observe(menu, { attributes: true, attributeFilter: ['style'] });
+        menu.__tvbot_pos_observer = observer;
+    }
+
     function injectContextMenuStyling() {
         const menu = document.getElementById('tree-structure-change-btn-box');
-        if (!menu || menu.querySelector('#tvbot-context-style-tools')) return;
+        if (!menu) return;
+        autoAdjustContextMenuPosition();
+        if (menu.querySelector('#tvbot-context-style-tools')) return;
 
         const api = window.__tvbot_node_style_api;
         if (!api) return;
