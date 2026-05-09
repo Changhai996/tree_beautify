@@ -2037,12 +2037,52 @@
             return true;
         };
 
+        const hookHardDeleteList = () => {
+            const list = app.styleData && app.styleData.deleteWholeCladeList;
+            if (!Array.isArray(list)) return;
+            if (list.__tvbot_soft_hooked) return;
+            
+            // Initialize hard undo stack if missing
+            if (!app.styleData.tvbotHardUndo) app.styleData.tvbotHardUndo = [];
+            
+            const wrap = (name) => {
+                const orig = list[name];
+                if (typeof orig !== 'function') return;
+                list[name] = function() {
+                    // Record state for undo before modifying
+                    if (name === 'push' || name === 'unshift' || name === 'splice') {
+                        app.styleData.tvbotHardUndo.push(JSON.parse(JSON.stringify(list)));
+                    }
+                    return orig.apply(list, arguments);
+                };
+            };
+            wrap('push');
+            wrap('unshift');
+            wrap('splice');
+            Object.defineProperty(list, '__tvbot_soft_hooked', { value: true, configurable: true });
+        };
+
+        const hardUndo = () => {
+            if (!app.styleData || !app.styleData.tvbotHardUndo || app.styleData.tvbotHardUndo.length === 0) return false;
+            const prevState = app.styleData.tvbotHardUndo.pop();
+            app.styleData.deleteWholeCladeList = prevState;
+            
+            if (app.styleData.rootNodeIndex) {
+                app.reRootTree(app.styleData.rootNodeIndex, app.styleData.rootOffsetRate);
+            } else {
+                app.reRootTree();
+            }
+            return true;
+        };
+
         if (!window.__tvbot_soft_prune_api) window.__tvbot_soft_prune_api = {};
         window.__tvbot_soft_prune_api.toggleDeleteForCurrent = toggleDeleteForCurrent;
         window.__tvbot_soft_prune_api.undo = softUndo;
         window.__tvbot_soft_prune_api.redo = softRedo;
+        window.__tvbot_soft_prune_api.hardUndo = hardUndo;
 
         setInterval(() => {
+            hookHardDeleteList();
             applySoftDeleteMarks(app);
         }, 900);
     }
@@ -2936,6 +2976,18 @@
             }
         });
 
+        const softDeleteLeafItem = mkItem('tvbot-ctx-soft-delete', 'cuIcon-roundclose', 'Cross out leaf', (e) => {
+            const info = api.getCurrentNodeInfo();
+            if (!info || !info.isLeaf) {
+                alert('Please left-click a leaf node first.');
+                return;
+            }
+            if (window.__tvbot_soft_prune_api && window.__tvbot_soft_prune_api.toggleDeleteForCurrent) {
+                window.__tvbot_soft_prune_api.toggleDeleteForCurrent();
+                hideTreeContextMenu();
+            }
+        });
+
         const colorTriangleItem = mkItem('tvbot-ctx-color-triangle', 'cuIcon-creative', 'Color folded clade', (e) => {
             const info = api.getCurrentNodeInfo();
             if (!info || !info.nodeIndex) {
@@ -3010,6 +3062,7 @@
         });
 
         wrap.appendChild(deleteCladeItem);
+        wrap.appendChild(softDeleteLeafItem);
         wrap.appendChild(colorTriangleItem);
         wrap.appendChild(branchColorItem);
         wrap.appendChild(branchBoldItem);
@@ -3026,6 +3079,7 @@
             const isFolded = !!(info && info.nodeIndex && app.styleData && app.styleData.collapseCladeList && app.styleData.collapseCladeList.some(c => c.nodeIndex === info.nodeIndex));
             
             deleteCladeItem.style.display = canBranch ? '' : 'none';
+            softDeleteLeafItem.style.display = canLeaf ? '' : 'none';
             colorTriangleItem.style.display = isFolded ? '' : 'none';
             branchColorItem.style.display = canBranch ? '' : 'none';
             branchBoldItem.style.display = canBranch ? '' : 'none';
@@ -3795,6 +3849,44 @@
             }
         };
 
+        const softDeleteLeafBtn = document.createElement('button');
+        softDeleteLeafBtn.className = 'btn btn-sm btn-outline-danger';
+        softDeleteLeafBtn.innerText = 'Cross out leaf';
+        softDeleteLeafBtn.style.height = '30px';
+        softDeleteLeafBtn.onclick = () => {
+            const api = window.__tvbot_node_style_api;
+            const info = api && api.getCurrentNodeInfo ? api.getCurrentNodeInfo() : null;
+            if (!info || !info.isLeaf) {
+                alert('Please left-click a leaf node first.');
+                return;
+            }
+            if (window.__tvbot_soft_prune_api && window.__tvbot_soft_prune_api.toggleDeleteForCurrent) {
+                window.__tvbot_soft_prune_api.toggleDeleteForCurrent();
+            }
+        };
+
+        const undoSoftDeleteBtn = document.createElement('button');
+        undoSoftDeleteBtn.className = 'btn btn-sm btn-outline-secondary';
+        undoSoftDeleteBtn.innerText = 'Undo cross';
+        undoSoftDeleteBtn.style.height = '30px';
+        undoSoftDeleteBtn.onclick = () => {
+            if (window.__tvbot_soft_prune_api && window.__tvbot_soft_prune_api.undo) {
+                window.__tvbot_soft_prune_api.undo();
+            }
+        };
+
+        const undoHardDeleteBtn = document.createElement('button');
+        undoHardDeleteBtn.className = 'btn btn-sm btn-outline-secondary';
+        undoHardDeleteBtn.innerText = 'Undo branch delete';
+        undoHardDeleteBtn.style.height = '30px';
+        undoHardDeleteBtn.onclick = () => {
+            if (window.__tvbot_soft_prune_api && window.__tvbot_soft_prune_api.hardUndo) {
+                if (!window.__tvbot_soft_prune_api.hardUndo()) {
+                    alert('No branch deletion to undo.');
+                }
+            }
+        };
+
         const clearNodeStyleBtn = document.createElement('button');
         clearNodeStyleBtn.className = 'btn btn-sm btn-outline-secondary';
         clearNodeStyleBtn.innerText = 'Reset Style';
@@ -3841,7 +3933,10 @@
         rowStyle.appendChild(leafBoldBtn);
         rowStyle.appendChild(foldColorBtn);
         rowStyle.appendChild(clearNodeStyleBtn);
+        rowStyle.appendChild(softDeleteLeafBtn);
+        rowStyle.appendChild(undoSoftDeleteBtn);
         rowStyle.appendChild(deleteBranchBtn);
+        rowStyle.appendChild(undoHardDeleteBtn);
         rowStyle.appendChild(styleHint);
 
         box.appendChild(title);
