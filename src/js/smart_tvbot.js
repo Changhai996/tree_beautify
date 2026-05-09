@@ -2533,7 +2533,23 @@
         const svg = document.querySelector('svg#svg');
         if (!svg || !evt) return;
         const branchEl = findNearestBranchElement(svg, evt.clientX, evt.clientY);
+        
+        let elNodeIndex = '';
+        if (branchEl && branchEl.__data__) {
+            const d = branchEl.__data__;
+            if (d.target && d.target.data && d.target.data.nodeIndex != null) {
+                elNodeIndex = String(d.target.data.nodeIndex);
+            } else if (d.data && d.data.nodeIndex != null) {
+                elNodeIndex = String(d.data.nodeIndex);
+            }
+        }
+        
         const branchNode = findNearestTreeBranchNode(app, evt.clientX, evt.clientY);
+        let finalBranchNodeIndex = elNodeIndex;
+        if (!finalBranchNodeIndex && branchNode && branchNode.data && branchNode.data.nodeIndex != null) {
+            finalBranchNodeIndex = String(branchNode.data.nodeIndex);
+        }
+        
         let leafEl = null;
         if (isLeafTextElement(evt.target)) {
             leafEl = evt.target;
@@ -2547,7 +2563,7 @@
             clientY: evt.clientY,
             svgPoint: getSvgUserPoint(svg, evt.clientX, evt.clientY),
             branchSig: getElementSignature(branchEl),
-            branchNodeIndex: branchNode && branchNode.data && branchNode.data.nodeIndex != null ? String(branchNode.data.nodeIndex) : '',
+            branchNodeIndex: finalBranchNodeIndex,
             leafNodeIndex: leafNode && leafNode.data && leafNode.data.nodeIndex != null ? String(leafNode.data.nodeIndex) : '',
             leafSig: getElementSignature(leafEl),
             leafText: leafEl ? String(leafEl.textContent || '').trim() : '',
@@ -2566,7 +2582,7 @@
                 return leafNode;
             }
         }
-        let branchNode = findNearestTreeBranchNode(app, evt.clientX, evt.clientY);
+        let branchNode = state && state.branchNodeIndex ? getTreeNodeByIndex(app, state.branchNodeIndex) : null;
         if (!branchNode) {
             const currentIdx = app.styleData ? app.styleData.currentNodeIndex : null;
             const currentNode = getTreeNodeByIndex(app, currentIdx);
