@@ -2696,13 +2696,61 @@
         const getCurrentBranchSubtreeNodes = () => {
             const node = getCurrentBranchRootNode();
             if (!node || typeof node.descendants !== 'function') return [];
-            return [node, ...(node.descendants() || [])].filter(x => x && x.parent);
+            
+            const isFolded = (n) => {
+                return !!(n && n.data && n.data.nodeIndex && app.styleData && app.styleData.collapseCladeList && app.styleData.collapseCladeList.some(c => c.nodeIndex === n.data.nodeIndex));
+            };
+            
+            // If the node itself is folded, we only return the node itself because its children are hidden
+            if (isFolded(node)) return [node];
+
+            // Otherwise return the node and all its non-folded descendants. 
+            // If a descendant is folded, we include it, but don't include its children.
+            let result = [];
+            const traverse = (n) => {
+                if (!n || !n.parent) return;
+                result.push(n);
+                if (!isFolded(n) && n.children) {
+                    n.children.forEach(traverse);
+                }
+            };
+            
+            // We need to include the root node of the branch selection if it has a parent
+            if (node.parent) {
+                result.push(node);
+            }
+            if (!isFolded(node) && node.children) {
+                node.children.forEach(traverse);
+            }
+            
+            return result;
         };
 
         const getCurrentLeafSubtreeNodes = () => {
             const node = getCurrentBranchRootNode();
             if (!node || typeof node.descendants !== 'function') return [];
-            return [node, ...(node.descendants() || [])].filter(x => x && (!x.children || x.children.length === 0));
+            
+            const isFolded = (n) => {
+                return !!(n && n.data && n.data.nodeIndex && app.styleData && app.styleData.collapseCladeList && app.styleData.collapseCladeList.some(c => c.nodeIndex === n.data.nodeIndex));
+            };
+
+            let result = [];
+            const traverse = (n) => {
+                if (!n) return;
+                if (!n.children || n.children.length === 0) {
+                    result.push(n);
+                } else if (!isFolded(n)) {
+                    n.children.forEach(traverse);
+                }
+            };
+            
+            if (!node.children || node.children.length === 0) {
+                result.push(node);
+            } else if (!isFolded(node)) {
+                node.children.forEach(traverse);
+            }
+            
+            return result;
         };
 
         const styleCurrentBranchSubtree = (opts = {}) => {
@@ -2714,6 +2762,10 @@
             const svg = document.querySelector('svg#svg');
             const branchElMap = svg ? buildBranchElementMap(app, svg) : new Map();
             
+            const isFolded = (n) => {
+                return !!(n && n.data && n.data.nodeIndex && app.styleData && app.styleData.collapseCladeList && app.styleData.collapseCladeList.some(c => c.nodeIndex === n.data.nodeIndex));
+            };
+
             const uniqueNodes = Array.from(new Set(nodes));
             uniqueNodes.forEach((node, idx) => {
                 const nodeIndex = String(node.data && node.data.nodeIndex != null ? node.data.nodeIndex : '');
@@ -2732,7 +2784,30 @@
                     width: normalizeStyleWidth(opts.width != null ? opts.width : current.width, opts.bold ? 3.6 : 2.4)
                 };
                 upsertByKey(app.styleData.tvbotBranchStyles, x => x.nodeIndex, item);
+                
+                // Also color the folded triangle if this node is folded
+                if (isFolded(node) && opts.color) {
+                    if (!app.figureData) app.figureData = {};
+                    if (!app.figureData["folded clade"]) app.figureData["folded clade"] = {};
+                    if (!app.figureData["folded clade"]["Custom color"]) {
+                        app.figureData["folded clade"]["Custom color"] = { switch: { value: true } };
+                    }
+                    app.figureData["folded clade"]["Custom color"].switch = { value: true };
+                    app.figureData["folded clade"]["Custom color"][nodeIndex] = {
+                        type: "color",
+                        value: opts.color || "#cccccc",
+                        isSvgAttr: true
+                    };
+                }
             });
+            
+            // Force redraw of folded clades
+            if (typeof app.drawTriangle === 'function') {
+                app.drawTriangle();
+            } else if (typeof app.init === 'function') {
+                app.init();
+            }
+            
             applyNodeStyleMarks(app);
             return true;
         };
