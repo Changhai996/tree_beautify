@@ -2701,13 +2701,16 @@
                 return !!(n && n.data && n.data.nodeIndex && app.styleData && app.styleData.collapseCladeList && app.styleData.collapseCladeList.some(c => c.nodeIndex === n.data.nodeIndex));
             };
             
-            // If the node itself is folded, we only return the node itself because its children are hidden
+            // If the node itself is folded, we still return the node itself so its parent branch is colored.
             if (isFolded(node)) return [node];
 
             // Otherwise return the node and all its non-folded descendants. 
             // If a descendant is folded, we include it, but don't include its children.
             let result = [];
             const traverse = (n) => {
+                // To color the branch correctly, we must include the node itself.
+                // The branch path in D3 connects a node to its parent.
+                // So if we include the folded node, its incoming branch gets styled.
                 if (!n || !n.parent) return;
                 result.push(n);
                 if (!isFolded(n) && n.children) {
@@ -2756,8 +2759,14 @@
         const styleCurrentBranchSubtree = (opts = {}) => {
             const rootNode = getCurrentBranchRootNode();
             if (!rootNode || !rootNode.parent) return false;
+            
+            // To ensure the root branch always gets colored regardless of fold state
             const nodes = getCurrentBranchSubtreeNodes();
+            if (!nodes.length && rootNode.parent) {
+                 nodes.push(rootNode);
+            }
             if (!nodes.length) return false;
+            
             const state = getCurrentContextState();
             const svg = document.querySelector('svg#svg');
             const branchElMap = svg ? buildBranchElementMap(app, svg) : new Map();
