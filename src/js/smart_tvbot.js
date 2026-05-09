@@ -2623,6 +2623,10 @@
                 t.removeAttribute('data-tvbot-leaf-styled');
                 t.style.removeProperty('fill');
                 t.style.removeProperty('font-weight');
+                const origFill = t.getAttribute('data-tvbot-orig-leaf-fill');
+                const origWeight = t.getAttribute('data-tvbot-orig-leaf-weight');
+                if (origFill) t.setAttribute('fill', origFill);
+                if (origWeight) t.setAttribute('font-weight', origWeight);
             }
             const raw = (t.textContent != null) ? String(t.textContent) : '';
             const trimmed = raw.trim();
@@ -2633,9 +2637,14 @@
             if (!matchedId) return;
             const style = leafMap.get(matchedId);
             if (!style) return;
+            
+            if (t.getAttribute('data-tvbot-leaf-styled') !== '1') {
+                t.setAttribute('data-tvbot-orig-leaf-fill', t.getAttribute('fill') || '');
+                t.setAttribute('data-tvbot-orig-leaf-weight', t.getAttribute('font-weight') || '');
+            }
             t.setAttribute('data-tvbot-leaf-styled', '1');
-            t.style.setProperty('fill', style.color);
-            t.style.setProperty('font-weight', style.bold ? '700' : '400');
+            t.style.setProperty('fill', style.color, 'important');
+            t.style.setProperty('font-weight', style.bold ? '700' : '400', 'important');
         });
 
         branchArr.forEach(item => {
@@ -2662,9 +2671,19 @@
         const getCurrentNodeInfo = () => {
             const state = getCurrentContextState();
             const branchIdx = app.__tvbot_selected_branch_node_index != null ? app.__tvbot_selected_branch_node_index : null;
-            const idx = state && state.leafNodeIndex
+            let idx = state && state.leafNodeIndex
                 ? state.leafNodeIndex
                 : (branchIdx != null && branchIdx !== '' ? branchIdx : (app.styleData ? app.styleData.currentNodeIndex : null));
+            
+            // If the user right-clicked a triangle, state.branchNodeIndex will have the actual nodeIndex of the folded clade.
+            // We should prioritize it ONLY if it is actually folded, so we don't accidentally override normal leaf clicks.
+            if (state && state.branchNodeIndex) {
+                const isFolded = app.styleData && app.styleData.collapseCladeList && app.styleData.collapseCladeList.some(c => String(c.nodeIndex) === String(state.branchNodeIndex));
+                if (isFolded) {
+                    idx = state.branchNodeIndex;
+                }
+            }
+
             const node = getTreeNodeByIndex(app, idx);
             if (!node) return null;
             const leafId = String(pickTreeNodeLabel(node) || '').trim();
@@ -2842,6 +2861,28 @@
             if (!nodes.length) return false;
             const nodeIndexSet = new Set(nodes.map(node => String(node && node.data && node.data.nodeIndex != null ? node.data.nodeIndex : '')).filter(Boolean));
             app.styleData.tvbotBranchStyles = app.styleData.tvbotBranchStyles.filter(x => !x || !nodeIndexSet.has(String(x.nodeIndex)));
+            
+            // Clear triangle stroke and fill if it's folded
+            if (app.figureData && app.figureData["folded clade"]) {
+                nodes.forEach(node => {
+                    const nId = node.data && node.data.nodeIndex;
+                    if (nId) {
+                        if (app.figureData["folded clade"]["Custom stroke color"] && app.figureData["folded clade"]["Custom stroke color"][nId]) {
+                            delete app.figureData["folded clade"]["Custom stroke color"][nId];
+                        }
+                        if (app.figureData["folded clade"]["Custom color"] && app.figureData["folded clade"]["Custom color"][nId]) {
+                            delete app.figureData["folded clade"]["Custom color"][nId];
+                        }
+                    }
+                });
+            }
+
+            if (typeof app.drawTriangle === 'function') {
+                app.drawTriangle();
+            } else if (typeof app.init === 'function') {
+                app.init();
+            }
+
             applyNodeStyleMarks(app);
             return true;
         };
