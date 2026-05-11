@@ -15,7 +15,7 @@ let combinedZoomInitialized = false;
 let combinedZoomBehavior = null;
 let combinedZoomTransform = d3.zoomIdentity.translate(20, 20).scale(1);
 const layoutState = {
-    rightX: 0,
+    rightX: -1000,
     rightY: 0
 };
 const defaultConnectionStyle = {
@@ -23,9 +23,177 @@ const defaultConnectionStyle = {
     width: 2,
     opacity: 0.7
 };
+const workspaceBrowserState = {
+    loaded: false,
+    loading: false,
+    treeList: [],
+    projectList: [],
+    sortBy: 'mtime',
+    sortDir: 'desc',
+    search: '',
+    targetType: '1' // '1', '2', or 'comparison'
+};
+const UI_TEXT = {
+    en: {
+        leftTree: 'Left Tree',
+        rightTree: 'Right Tree',
+        leaf: 'leaf',
+        foldedClade: 'folded clade',
+        styleHintDefault: 'These act as default styles for new connections if none is selected.',
+        styleHintSelected: (n) => `Editing style for connection ${n}.`,
+        manualModeOn: 'Disable Manual Connection',
+        manualModeOff: 'Enable Manual Connection',
+        boxDeleteOn: 'Disable Box Deletion',
+        boxDeleteOff: 'Enable Box Deletion',
+        panLocked: 'Unlock Canvas Panning',
+        panUnlocked: 'Lock Canvas Panning',
+        notLoaded: 'Not Loaded',
+        workspaceSource: (p) => `Workspace / ${p}`,
+        localSource: 'Local JSON',
+        selectedTree: (side, name) => `Selected ${side}: ${name}`,
+        removedConnection: (l, r) => `Removed connection: ${l} ↔ ${r}`,
+        exportLoadFirst: 'Please load both trees before exporting.',
+        exportedSvg: 'Exported the current comparison as SVG.',
+        exportedPdf: 'Exported the current comparison as PDF.',
+        pdfError: (msg) => `PDF export failed: ${msg}`,
+        selectedConnection: (l, r) => `Selected connection: ${l} ↔ ${r}. Double-click it to delete.`,
+        boxDeleteRemoved: (n) => `Box deletion completed: removed ${n} connections.`,
+        boxDeleteNone: 'No connections were hit inside the selected area.',
+        noConnections: 'No connections yet',
+        pickFirst: (side, kind, name) => `Selected ${side} ${kind}: ${name}. Click the target on the other tree to create a connection.`,
+        pickSwitch: (side, kind, name) => `Changed selection to ${side} ${kind}: ${name}. Click the target on the other tree to create a connection.`,
+        connected: (l, r) => `Connected: ${l} ↔ ${r}`,
+        chooseTreesFirst: (missing) => `Please select both trees first. Missing: ${missing.join(', ')}`,
+        loadingTrees: 'Loading both trees...',
+        treesLoaded: 'Both trees are loaded on the same canvas. The right tree is mirrored; use mouse wheel to zoom, drag to pan, or the sliders to adjust the right tree position.',
+        treeLoadFailed: (msg) => `Tree rendering failed: ${msg}`,
+        treeLoadAlert: (msg) => `The dual-tree canvas did not finish rendering: ${msg}`,
+        loadDualFirst: 'Please load both trees first.',
+        autoConnected: (n) => `Automatically added ${n} same-name connections.`,
+        autoConnectedNone: 'No matching leaf IDs or folded clade names were found.',
+        workspaceNoProjects: 'No projects found in Workspace.',
+        workspaceEmptyProject: 'No tree files in this project',
+        workspaceLoadFailed: (msg) => `Failed to load workspace data: ${msg}`,
+        workspaceSelectFailed: (msg) => `Failed to load tree from Workspace: ${msg}`,
+        leftJsonReadFailed: (msg) => `Failed to read the left JSON file: ${msg}`,
+        rightJsonReadFailed: (msg) => `Failed to read the right JSON file: ${msg}`,
+        manualStatusOn: 'Manual connection mode is enabled. Click a leaf or folded clade label on one tree, then click its target on the other tree.',
+        manualStatusOff: 'Manual connection mode is disabled. The unified canvas still supports panning, zooming, and connection editing.',
+        boxDeleteStatusOn: 'Box deletion mode is enabled. Drag a rectangle with the left mouse button to remove multiple connections.',
+        boxDeleteStatusOff: 'Box deletion mode is disabled.',
+        panStatusLocked: 'Canvas panning is locked. You can still edit connections, use box deletion, and export.',
+        panStatusUnlocked: 'Canvas panning is unlocked. Drag to pan and use the mouse wheel to zoom.',
+        clearedConnections: 'Cleared all connections.',
+        layoutUpdated: 'Updated the dual-tree layout. You can keep adjusting the right tree position to bring leaf-to-leaf connections closer.',
+        initialStatus: 'Select Workspace JSON files for the left and right trees, then load them. The unified canvas supports panning, zooming, and visible connection endpoints.',
+        saveLoadBoth: 'Please load both trees first.',
+        saveNoLocal: 'Cannot save local files. Please import trees from Workspace.',
+        saveFolderPrompt: 'Enter the Workspace folder name:',
+        saveFolderInvalid: 'Invalid folder name. Please avoid /, \\, .., and hidden folder names.',
+        savePrompt: 'Enter a file name to save this comparison:',
+        saveOk: 'Saved successfully!',
+        saveError: (msg) => `Error: ${msg}`,
+        saveFailed: (msg) => `Failed to save: ${msg}`,
+        loadedNotTanglegram: 'Loaded JSON is not a tanglegramTree',
+        workspaceLoading: 'Loading workspace files...',
+        workspaceSummary: (visible, total) => `${visible} shown / ${total} total`,
+        workspaceSummaryLoading: 'Loading...',
+        sortDesc: 'Descending',
+        sortAsc: 'Ascending',
+        name: 'Name',
+        modified: 'Modified',
+        layout: 'Layout',
+        comparison: 'Comparison'
+    },
+    zh: {
+        leftTree: '左侧树',
+        rightTree: '右侧树',
+        leaf: '叶节点',
+        foldedClade: '折叠 clade',
+        styleHintDefault: '未选中具体连线时，这些参数会作为新连线默认样式。',
+        styleHintSelected: (n) => `当前正在编辑第 ${n} 条连线样式。`,
+        manualModeOn: '关闭手动连线模式',
+        manualModeOff: '开启手动连线模式',
+        boxDeleteOn: '关闭框选删线',
+        boxDeleteOff: '开启框选删线',
+        panLocked: '解锁画布移动',
+        panUnlocked: '锁定画布移动',
+        notLoaded: '尚未加载',
+        workspaceSource: (p) => `Workspace / ${p}`,
+        localSource: '本地 JSON',
+        selectedTree: (side, name) => `已选择${side}：${name}`,
+        removedConnection: (l, r) => `已删除连线：${l} ↔ ${r}`,
+        exportLoadFirst: '请先加载双树后再导出。',
+        exportedSvg: '已导出当前双树比较图为 SVG。',
+        exportedPdf: '已导出当前双树比较图为 PDF。',
+        pdfError: (msg) => `PDF 导出失败：${msg}`,
+        selectedConnection: (l, r) => `已选中连线：${l} ↔ ${r}。双击该连线可直接删除。`,
+        boxDeleteRemoved: (n) => `框选删除完成：已删除 ${n} 条连线。`,
+        boxDeleteNone: '框选区域内没有命中连线。',
+        noConnections: '暂无连线',
+        pickFirst: (side, kind, name) => `已选中 ${side}${kind}：${name}，请点击另一侧树的目标完成连线。`,
+        pickSwitch: (side, kind, name) => `已改为选中 ${side}${kind}：${name}，请点击另一侧树的目标完成连线。`,
+        connected: (l, r) => `已连线：${l} ↔ ${r}`,
+        chooseTreesFirst: (missing) => `请先选择两棵树。缺少：${missing.join('、')}`,
+        loadingTrees: '正在加载左右树图...',
+        treesLoaded: '双树已加载到同一张画布。右侧树已镜像，可用鼠标滚轮缩放、拖动画布平移；也可用左侧滑杆调节右树位置。',
+        treeLoadFailed: (msg) => `树图加载失败：${msg}`,
+        treeLoadAlert: (msg) => `双树画布没有完成渲染：${msg}`,
+        loadDualFirst: '请先加载左右双树。',
+        autoConnected: (n) => `已自动添加 ${n} 条同名目标连线。`,
+        autoConnectedNone: '没有找到可自动匹配的同名叶节点或折叠 clade。',
+        workspaceNoProjects: 'Workspace 中没有项目。',
+        workspaceEmptyProject: '该项目中暂无树文件',
+        workspaceLoadFailed: (msg) => `加载 Workspace 数据失败：${msg}`,
+        workspaceSelectFailed: (msg) => `从 Workspace 载入树失败：${msg}`,
+        leftJsonReadFailed: (msg) => `左侧 JSON 读取失败：${msg}`,
+        rightJsonReadFailed: (msg) => `右侧 JSON 读取失败：${msg}`,
+        manualStatusOn: '手动连线模式已开启。请先点左侧或右侧树上的 leaf / folded clade 标签，再点另一侧对应标签完成连线。',
+        manualStatusOff: '手动连线模式已关闭。当前统一画布支持平移/缩放和连线；单击连线可选中，双击连线可删除。',
+        boxDeleteStatusOn: '框选删线模式已开启。按住鼠标左键在画布中拖出矩形，可批量删除命中的连线。',
+        boxDeleteStatusOff: '框选删线模式已关闭。',
+        panStatusLocked: '画布移动已锁定。你仍可进行连线、框选删线和导出操作。',
+        panStatusUnlocked: '画布移动已解锁。可继续拖动画布与滚轮缩放。',
+        clearedConnections: '已清空所有连线。',
+        layoutUpdated: '已更新双树布局。你可以继续调节右树的左右/上下偏移，让 leaf-to-leaf 连线更贴近。',
+        initialStatus: '先分别选择左侧和右侧的 Workspace JSON 文件，再加载双树。当前是同一张合成画布；需要手动连线时，请先开启“手动连线模式”。',
+        saveLoadBoth: '请先加载双树。',
+        saveNoLocal: '包含本地文件，无法保存到 Workspace。请从 Workspace 导入树。',
+        saveFolderPrompt: '请输入要保存到的 Workspace 文件夹名：',
+        saveFolderInvalid: '文件夹名不合法，请不要包含 /、\\、.. 或以 . 开头。',
+        savePrompt: '请输入保存的文件名：',
+        saveOk: '保存成功！',
+        saveError: (msg) => `错误：${msg}`,
+        saveFailed: (msg) => `保存失败：${msg}`,
+        loadedNotTanglegram: '载入的 JSON 不是 tanglegramTree',
+        workspaceLoading: '正在加载 Workspace 文件...',
+        workspaceSummary: (visible, total) => `显示 ${visible} / 共 ${total}`,
+        workspaceSummaryLoading: '加载中...',
+        sortDesc: '降序',
+        sortAsc: '升序',
+        name: '名称',
+        modified: '修改时间',
+        layout: '布局',
+        comparison: '双树比较'
+    }
+};
+
+function getCurrentLangSafe() {
+    return document.documentElement.lang || localStorage.getItem('tvbot_lang') || 'en';
+}
+
+function t(key, ...args) {
+    const lang = getCurrentLangSafe();
+    const value = (UI_TEXT[lang] && UI_TEXT[lang][key]) || UI_TEXT.en[key] || key;
+    return typeof value === 'function' ? value(...args) : value;
+}
 
 function getWorkspaceModal() {
     return document.getElementById('workspaceModal');
+}
+
+function getSaveModal() {
+    return document.getElementById('saveComparisonModal');
 }
 
 function escapeHtml(value) {
@@ -39,7 +207,7 @@ function escapeHtml(value) {
 
 function normalizePlotType(plotType) {
     const type = String(plotType || 'normalTree');
-    if (type === 'circleTree' || type === 'unrootedTree' || type === 'normalTree') return type;
+    if (type === 'circleTree' || type === 'unrootedTree' || type === 'normalTree' || type === 'tanglegramTree') return type;
     return 'normalTree';
 }
 
@@ -48,11 +216,13 @@ function getTreeFrame(treeNum) {
 }
 
 function getTitleText(treeNum) {
-    return treeNum === 1 ? '左侧树' : '右侧树';
+    if (treeNum === 'comparison') return t('comparison');
+    return treeNum === 1 ? t('leftTree') : t('rightTree');
 }
 
 function setStatus(message) {
-    document.getElementById('selection-status').textContent = message;
+    const el = document.getElementById('selection-status');
+    if (el) el.textContent = message;
 }
 
 function getStyleInputs() {
@@ -78,30 +248,28 @@ function getLayoutInputs() {
 function updateStyleHint() {
     const inputs = getStyleInputs();
     if (selectedConnectionIndex === null) {
-        inputs.hint.textContent = '未选中具体连线时，这些参数会作为新连线默认样式。';
+        inputs.hint.textContent = t('styleHintDefault');
     } else {
-        inputs.hint.textContent = `当前正在编辑第 ${selectedConnectionIndex + 1} 条连线样式。`;
+        inputs.hint.textContent = t('styleHintSelected', selectedConnectionIndex + 1);
     }
 }
 
 function updateManualModeButton() {
     const button = document.getElementById('btn-manual-mode');
     button.className = manualConnectMode ? 'btn btn-success' : 'btn btn-outline-success';
-    button.innerHTML = manualConnectMode
-        ? '关闭手动连线模式'
-        : '开启手动连线模式';
+    button.textContent = manualConnectMode ? t('manualModeOn') : t('manualModeOff');
 }
 
 function updateBoxDeleteModeButton() {
     const button = document.getElementById('btn-box-delete-mode');
     button.className = boxDeleteMode ? 'btn btn-danger' : 'btn btn-outline-danger';
-    button.textContent = boxDeleteMode ? '关闭框选删线' : '开启框选删线';
+    button.textContent = boxDeleteMode ? t('boxDeleteOn') : t('boxDeleteOff');
 }
 
 function updatePanLockButton() {
     const button = document.getElementById('btn-toggle-pan');
     button.className = canvasPanLocked ? 'btn btn-info' : 'btn btn-outline-info';
-    button.textContent = canvasPanLocked ? '解锁画布移动' : '锁定画布移动';
+    button.textContent = canvasPanLocked ? t('panLocked') : t('panUnlocked');
 }
 
 function refreshStyleControlLabels() {
@@ -154,14 +322,15 @@ function revokeLocalBlob(treeNum) {
 
 function updateTreeSummary(treeNum) {
     const tree = selectedTrees[treeNum];
-    document.getElementById(`label-tree${treeNum}`).textContent = tree ? `[${tree.treeName}]` : '';
-    document.getElementById(`tree-title-${treeNum}`).textContent = tree ? tree.treeName : getTitleText(treeNum);
-    document.getElementById(`tree-source-${treeNum}`).textContent = tree
-        ? `${tree.sourceLabel} | ${tree.plotType}`
-        : '尚未加载';
-
+    const labelEl = document.getElementById(`label-tree${treeNum}`);
+    const titleEl = document.getElementById(`tree-title-${treeNum}`);
+    const sourceEl = document.getElementById(`tree-source-${treeNum}`);
     const openBtn = document.getElementById(`open-tree-${treeNum}`);
-    openBtn.disabled = !tree;
+
+    if (labelEl) labelEl.textContent = tree ? `[${tree.treeName}]` : '';
+    if (titleEl) titleEl.textContent = tree ? tree.treeName : getTitleText(treeNum);
+    if (sourceEl) sourceEl.textContent = tree ? `${tree.sourceLabel} | ${tree.plotType}` : t('notLoaded');
+    if (openBtn) openBtn.disabled = !tree;
 }
 
 function buildRenderUrl(config) {
@@ -182,7 +351,7 @@ function setSelectedTree(treeNum, config) {
         renderUrl: buildRenderUrl(config)
     };
     updateTreeSummary(treeNum);
-    setStatus(`已选择${getTitleText(treeNum)}：${config.treeName}`);
+    setStatus(t('selectedTree', getTitleText(treeNum), config.treeName));
 }
 
 async function fetchTreePayload(projectId, treeName) {
@@ -196,9 +365,11 @@ async function fetchTreePayload(projectId, treeName) {
 function attachFrameChrome(treeNum) {
     const tree = selectedTrees[treeNum];
     const openBtn = document.getElementById(`open-tree-${treeNum}`);
-    openBtn.onclick = function() {
-        if (tree && tree.renderUrl) window.open(tree.renderUrl, '_blank');
-    };
+    if (openBtn) {
+        openBtn.onclick = function() {
+            if (tree && tree.renderUrl) window.open(tree.renderUrl, '_blank');
+        };
+    }
 }
 
 function prepareEmbeddedFrame(frame) {
@@ -262,6 +433,49 @@ function waitForTreeRender(treeNum, timeoutMs = 15000) {
             }
 
             window.setTimeout(poll, 200);
+        };
+
+        poll();
+    });
+}
+
+function waitForEmbeddedStyleApply(treeNum, timeoutMs = 4000) {
+    return new Promise((resolve) => {
+        const frame = getTreeFrame(treeNum);
+        const startedAt = Date.now();
+
+        const poll = () => {
+            try {
+                const win = frame && frame.contentWindow;
+                const app = win && (win.normalTree || win.circleTree || win.unrootedTree);
+                const api = win && win.__tvbot_node_style_api;
+                const branchStyles = Array.isArray(app?.styleData?.tvbotBranchStyles) ? app.styleData.tvbotBranchStyles : [];
+                const leafStyles = Array.isArray(app?.styleData?.tvbotLeafStyles) ? app.styleData.tvbotLeafStyles : [];
+                const hasCustomStyles = branchStyles.length > 0 || leafStyles.length > 0;
+
+                if (api && typeof api.apply === 'function') {
+                    api.apply();
+                    if (!hasCustomStyles) {
+                        resolve();
+                        return;
+                    }
+
+                    const svg = frame.contentDocument && frame.contentDocument.getElementById('svg');
+                    const hasStyledLeaf = !!(svg && svg.querySelector('[data-tvbot-leaf-styled="1"]'));
+                    const hasStyledBranch = !!(svg && svg.querySelector('[data-tvbot-branch-styled="1"]'));
+                    if (hasStyledLeaf || hasStyledBranch) {
+                        resolve();
+                        return;
+                    }
+                }
+            } catch (err) {
+            }
+
+            if (Date.now() - startedAt > timeoutMs) {
+                resolve();
+                return;
+            }
+            window.setTimeout(poll, 120);
         };
 
         poll();
@@ -341,8 +555,33 @@ async function ensurePdfLibraries() {
 }
 
 function getTargetTypeLabel(record) {
-    if (record.kind === 'folded-clade') return '折叠 clade';
-    return '叶节点';
+    if (record.kind === 'folded-clade') return t('foldedClade');
+    return t('leaf');
+}
+
+function isValidWorkspaceName(name) {
+    const value = String(name || '').trim();
+    if (!value) return false;
+    if (value === '.' || value === '..') return false;
+    if (value.startsWith('.')) return false;
+    if (value.includes('/') || value.includes('\\')) return false;
+    if (value.includes('..')) return false;
+    return true;
+}
+
+function getDefaultSaveProject() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlProject = (urlParams.get('projectId') || '').trim();
+    if (isValidWorkspaceName(urlProject) && urlProject !== 'local') return urlProject;
+
+    const leftProject = selectedTrees[1]?.projectId;
+    const rightProject = selectedTrees[2]?.projectId;
+    if (leftProject && leftProject === rightProject && isValidWorkspaceName(leftProject) && leftProject !== 'local') {
+        return leftProject;
+    }
+    if (leftProject && isValidWorkspaceName(leftProject) && leftProject !== 'local') return leftProject;
+    if (rightProject && isValidWorkspaceName(rightProject) && rightProject !== 'local') return rightProject;
+    return 'comparisons';
 }
 
 function buildTargetRecord(treeNum, datum, element, kindHint) {
@@ -491,6 +730,7 @@ function getTargetPoint(treeNum, key) {
 function syncOverlaySize() {
     const overlay = getCombinedSvg();
     const shell = document.getElementById('stage-shell');
+    if (!overlay || !shell) return;
     const width = Math.max(shell.clientWidth - 40, 1200);
     const height = Math.max(shell.clientHeight - 80, 800);
     overlay.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -510,7 +750,7 @@ function removeConnectionAt(index) {
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
-    setStatus(`已删除连线：${removed.left.name} ↔ ${removed.right.name}`);
+    setStatus(t('removedConnection', removed.left.name, removed.right.name));
 }
 
 function cloneSvgWithComputedStyles(svgElement) {
@@ -547,7 +787,7 @@ function cloneSvgWithComputedStyles(svgElement) {
 function exportCombinedSvg() {
     const svgElement = getCombinedSvg();
     if (!svgElement || !svgElement.querySelector('*')) {
-        alert('请先加载双树后再导出。');
+        alert(t('exportLoadFirst'));
         return;
     }
     const exportSvg = cloneSvgWithComputedStyles(svgElement);
@@ -559,13 +799,13 @@ function exportCombinedSvg() {
     link.download = `${makeExportBaseName()}.svg`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setStatus('已导出当前双树比较图为 SVG。');
+    setStatus(t('exportedSvg'));
 }
 
 async function exportCombinedPdf() {
     const svgElement = getCombinedSvg();
     if (!svgElement || !svgElement.querySelector('*')) {
-        alert('请先加载双树后再导出。');
+        alert(t('exportLoadFirst'));
         return;
     }
     try {
@@ -575,21 +815,37 @@ async function exportCombinedPdf() {
         const height = Number(svgElement.getAttribute('height')) || 900;
         const doc = new jsPDF(width > height ? 'l' : 'p', 'pt', [width, height]);
         const exportSvg = cloneSvgWithComputedStyles(svgElement);
-        // svg2pdf may tighten transformed right-side labels; nudge right-side labels outward in PDF only.
-        exportSvg.querySelectorAll('#tg-tree-2 text').forEach((textEl) => {
-            const anchor = textEl.getAttribute('text-anchor') || '';
-            const baseX = getNumericSvgAttr(textEl, 'x', 0);
-            const dx = getNumericSvgAttr(textEl, 'dx', 0);
-            const baseShift = anchor === 'end' ? -8 : 8;
-            textEl.setAttribute('x', String(baseX + dx + baseShift));
-            textEl.setAttribute('dx', '0');
+
+        // Fix overlap and right-tree mirroring issues for PDF export
+        exportSvg.querySelectorAll('text').forEach((textEl) => {
+            const rawText = textEl.textContent || '';
+            // 1. Fix ID and parentheses overlap by ensuring a clear gap
+            if (rawText.includes('(') && rawText.includes(')')) {
+                // If it looks like "Name (Count)", add extra spaces before the parenthesis
+                textEl.textContent = rawText.replace(/(\S+)\s*\(([^)]+)\)/g, '$1   ($2)');
+            }
+
+            // 2. Fix Right Tree mirrored labels specifically for svg2pdf
+            const parentGroup = textEl.closest('#tg-tree-2');
+            if (parentGroup) {
+                const anchor = textEl.getAttribute('text-anchor') || '';
+                const dx = getNumericSvgAttr(textEl, 'dx', 0);
+                // For right tree, we typically have text-anchor: end.
+                // In PDF, we nudge it slightly more to avoid tree overlap.
+                if (anchor === 'end') {
+                    textEl.setAttribute('dx', String(dx - 6));
+                } else if (anchor === 'start') {
+                    textEl.setAttribute('dx', String(dx + 6));
+                }
+            }
         });
+
         await doc.svg(exportSvg, { width, height });
         doc.save(`${makeExportBaseName()}.pdf`);
-        setStatus('已导出当前双树比较图为 PDF。');
+        setStatus(t('exportedPdf'));
     } catch (err) {
         console.error(err);
-        alert(`PDF 导出失败：${err.message}`);
+        alert(t('pdfError', err.message));
     }
 }
 
@@ -618,7 +874,7 @@ function drawConnections() {
                 selectedConnectionIndex = index;
                 updateConnectionList();
                 syncStyleControlsFromSelection();
-                setStatus(`已选中连线：${connection.left.name} ↔ ${connection.right.name}。双击该连线可直接删除。`);
+                setStatus(t('selectedConnection', connection.left.name, connection.right.name));
             })
             .on('dblclick', function(event) {
                 event.preventDefault();
@@ -754,30 +1010,34 @@ function renderSingleCanvas() {
     };
 
     const titleLayer = d3.select(getCombinedLayer('tg-title-layer'));
-    const leftTitleX = positions[1].x + leftMetrics.width / 2;
-    const rightTitleX = positions[2].x + rightMetrics.width / 2;
-    const titleY = Math.max(24 + viewportMinY, positions[1].y - 18);
-    const subtitleY = titleY + 16;
+    titleLayer.selectAll('*').remove();
 
-    [
-        { x: leftTitleX, title: selectedTrees[1]?.treeName || '左侧树', subtitle: selectedTrees[1]?.sourceLabel || '' },
-        { x: rightTitleX, title: selectedTrees[2]?.treeName || '右侧树', subtitle: selectedTrees[2]?.sourceLabel || '' }
-    ].forEach((item) => {
+    [1, 2].forEach((treeNum) => {
+        const tree = selectedTrees[treeNum];
+        const metrics = treeNum === 1 ? leftMetrics : rightMetrics;
+        const pos = positions[treeNum];
+        
+        const titleX = treeNum === 1 ? pos.x : pos.x + metrics.width;
+        const titleAnchor = treeNum === 1 ? 'start' : 'end';
+        const titleY = pos.y - 30;
+        const subtitleY = titleY + 16;
+
         titleLayer.append('text')
-            .attr('x', item.x)
+            .attr('x', titleX)
             .attr('y', titleY)
-            .attr('text-anchor', 'middle')
+            .attr('text-anchor', titleAnchor)
             .attr('font-size', 16)
             .attr('font-weight', 700)
             .attr('fill', '#1f2937')
-            .text(item.title);
+            .text(tree?.treeName || (treeNum === 1 ? t('leftTree') : t('rightTree')));
+
         titleLayer.append('text')
-            .attr('x', item.x)
+            .attr('x', titleX)
             .attr('y', subtitleY)
-            .attr('text-anchor', 'middle')
+            .attr('text-anchor', titleAnchor)
             .attr('font-size', 11)
             .attr('fill', '#64748b')
-            .text(item.subtitle);
+            .text(tree?.sourceLabel || '');
     });
 
     [1, 2].forEach((treeNum) => {
@@ -859,7 +1119,7 @@ function removeConnectionsInBox(box) {
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
-    setStatus(removed > 0 ? `框选删除完成：已删除 ${removed} 条连线。` : '框选区域内没有命中连线。');
+    setStatus(removed > 0 ? t('boxDeleteRemoved', removed) : t('boxDeleteNone'));
 }
 
 function setupBoxDeleteInteraction() {
@@ -926,8 +1186,9 @@ function setupBoxDeleteInteraction() {
 
 function updateConnectionList() {
     const list = document.getElementById('connection-list');
+    if (!list) return;
     if (connections.length === 0) {
-        list.innerHTML = '<div class="text-muted small">暂无连线</div>';
+        list.innerHTML = `<div class="text-muted small">${escapeHtml(t('noConnections'))}</div>`;
         return;
     }
 
@@ -957,13 +1218,13 @@ function connectionExists(leftKey, rightKey) {
 function handleLeafClick(treeNum, record) {
     if (!pendingSelection) {
         pendingSelection = record;
-        setStatus(`已选中 ${getTitleText(treeNum)}${getTargetTypeLabel(record)}：${record.name}，请点击另一侧树的目标完成连线。`);
+        setStatus(t('pickFirst', getTitleText(treeNum), getTargetTypeLabel(record), record.name));
         return;
     }
 
     if (pendingSelection.treeNum === treeNum) {
         pendingSelection = record;
-        setStatus(`已改为选中 ${getTitleText(treeNum)}${getTargetTypeLabel(record)}：${record.name}，请点击另一侧树的目标完成连线。`);
+        setStatus(t('pickSwitch', getTitleText(treeNum), getTargetTypeLabel(record), record.name));
         return;
     }
 
@@ -978,7 +1239,7 @@ function handleLeafClick(treeNum, record) {
         syncStyleControlsFromSelection();
     }
 
-    setStatus(`已连线：${left.name} ↔ ${right.name}`);
+    setStatus(t('connected', left.name, right.name));
     pendingSelection = null;
 }
 
@@ -1027,6 +1288,7 @@ function loadTreeIntoFrame(treeNum) {
             try {
                 prepareEmbeddedFrame(frame);
                 await waitForTreeRender(treeNum);
+                await waitForEmbeddedStyleApply(treeNum);
                 resolve();
             } catch (err) {
                 reject(err);
@@ -1040,9 +1302,9 @@ function loadTreeIntoFrame(treeNum) {
 async function loadSelectedTrees() {
     if (!selectedTrees[1] || !selectedTrees[2]) {
         const missing = [];
-        if (!selectedTrees[1]) missing.push('左侧树');
-        if (!selectedTrees[2]) missing.push('右侧树');
-        alert(`请先选择两棵树。缺少：${missing.join('、')}`);
+        if (!selectedTrees[1]) missing.push(t('leftTree'));
+        if (!selectedTrees[2]) missing.push(t('rightTree'));
+        alert(t('chooseTreesFirst', missing));
         return;
     }
 
@@ -1052,17 +1314,17 @@ async function loadSelectedTrees() {
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
-    setStatus('正在加载左右树图...');
+    setStatus(t('loadingTrees'));
 
     try {
         await Promise.all([loadTreeIntoFrame(1), loadTreeIntoFrame(2)]);
         redrawCombinedCanvas();
         startOverlaySync();
-        setStatus('双树已加载到同一张画布。右侧树已镜像，可用鼠标滚轮缩放、拖动画布平移；也可用左侧滑杆调节右树位置。');
+        setStatus(t('treesLoaded'));
     } catch (err) {
         console.error(err);
-        setStatus(`树图加载失败：${err.message}`);
-        alert(`双树画布没有完成渲染：${err.message}`);
+        setStatus(t('treeLoadFailed', err.message));
+        alert(t('treeLoadAlert', err.message));
     }
 }
 
@@ -1082,7 +1344,7 @@ function getTargetsByName(treeNum) {
 
 function autoConnectByName() {
     if (!ensureFramesReady()) {
-        alert('请先加载左右双树。');
+        alert(t('loadDualFirst'));
         return;
     }
 
@@ -1107,7 +1369,7 @@ function autoConnectByName() {
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
-    setStatus(added > 0 ? `已自动添加 ${added} 条同名目标连线。` : '没有找到可自动匹配的同名叶节点或折叠 clade。');
+    setStatus(added > 0 ? t('autoConnected', added) : t('autoConnectedNone'));
 }
 
 function parseLocalJsonFile(fileText) {
@@ -1124,106 +1386,207 @@ function setWorkspaceSelection(treeNum, projectId, treeName, payload) {
         projectId,
         plotType,
         dataUrl,
-        sourceLabel: `Workspace / ${projectId}`
+        sourceLabel: t('workspaceSource', projectId)
     });
 }
 
-window.openWorkspaceModal = function(treeNum) {
+function getWorkspaceControls() {
+    return {
+        container: document.getElementById('workspaceAccordion'),
+        summary: document.getElementById('workspace-summary'),
+        search: document.getElementById('workspace-search'),
+        sortBy: document.getElementById('workspace-sort-by'),
+        sortDir: document.getElementById('workspace-sort-dir')
+    };
+}
+
+function updateWorkspaceSortDirButton() {
+    const button = document.getElementById('workspace-sort-dir');
+    if (!button) return;
+    const icon = workspaceBrowserState.sortDir === 'desc' ? 'bi-sort-down' : 'bi-sort-up';
+    button.innerHTML = `<i class="bi ${icon}"></i> <span>${escapeHtml(t(workspaceBrowserState.sortDir === 'desc' ? 'sortDesc' : 'sortAsc'))}</span>`;
+}
+
+function updateWorkspaceSummary(visibleCount, totalCount) {
+    const summary = document.getElementById('workspace-summary');
+    if (!summary) return;
+    summary.textContent = workspaceBrowserState.loading
+        ? t('workspaceSummaryLoading')
+        : t('workspaceSummary', visibleCount, totalCount);
+}
+
+function renderWorkspaceLoading() {
+    const { container } = getWorkspaceControls();
+    if (!container) return;
+    updateWorkspaceSummary(0, 0);
+    container.innerHTML = `
+        <div class="workspace-empty-state">
+            <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+            <div>${escapeHtml(t('workspaceLoading'))}</div>
+        </div>
+    `;
+}
+
+function sortWorkspaceTrees(trees) {
+    const items = trees.slice();
+    const dir = workspaceBrowserState.sortDir === 'asc' ? 1 : -1;
+    items.sort((a, b) => {
+        if (workspaceBrowserState.sortBy === 'name') {
+            return dir * String(a.treeName || '').localeCompare(String(b.treeName || ''), undefined, { numeric: true, sensitivity: 'base' });
+        }
+        if (workspaceBrowserState.sortBy === 'plotType') {
+            return dir * String(a.plotType || '').localeCompare(String(b.plotType || ''), undefined, { sensitivity: 'base' });
+        }
+        return dir * ((Number(a.mtime) || 0) - (Number(b.mtime) || 0));
+    });
+    return items;
+}
+
+function renderWorkspaceBrowser() {
+    const { container, sortBy } = getWorkspaceControls();
+    if (!container) return;
+    if (sortBy) sortBy.value = workspaceBrowserState.sortBy;
+    updateWorkspaceSortDirButton();
+
+    const allTrees = Array.isArray(workspaceBrowserState.treeList) ? workspaceBrowserState.treeList : [];
+    const projects = Array.isArray(workspaceBrowserState.projectList) ? workspaceBrowserState.projectList : [];
+    const query = String(workspaceBrowserState.search || '').trim().toLowerCase();
+    const targetType = workspaceBrowserState.targetType;
+
+    if (projects.length === 0) {
+        updateWorkspaceSummary(0, 0);
+        container.innerHTML = `<div class="workspace-empty-state">${escapeHtml(t('workspaceNoProjects'))}</div>`;
+        return;
+    }
+
+    let visibleCount = 0;
+    const cards = projects.map((project) => {
+        const projectName = project.projectId;
+        const projectLabel = project.projectName || projectName;
+        const projectMatch = query && String(projectLabel).toLowerCase().includes(query);
+        let trees = allTrees.filter((item) => item.projectId === projectName);
+        
+        // Filter by target type
+        if (targetType === 'comparison') {
+            trees = trees.filter(item => item.plotType === 'tanglegramTree');
+        } else {
+            // normal tree loading
+            trees = trees.filter(item => item.plotType !== 'tanglegramTree');
+        }
+
+        if (query) {
+            const q = query;
+            trees = trees.filter((item) => {
+                const name = String(item.treeName || '').toLowerCase();
+                const layout = String(item.plotType || '').toLowerCase();
+                return name.includes(q) || layout.includes(q) || projectMatch;
+            });
+        }
+        if (query && trees.length === 0 && !projectMatch) return '';
+        trees = sortWorkspaceTrees(trees);
+        visibleCount += trees.length;
+
+        const bodyHtml = trees.length === 0
+            ? `<div class="workspace-empty-state">${escapeHtml(t('workspaceEmptyProject'))}</div>`
+            : `
+                <div class="workspace-file-head">
+                    <div>${escapeHtml(t('name'))}</div>
+                    <div>${escapeHtml(t('modified'))}</div>
+                    <div>${escapeHtml(t('layout'))}</div>
+                </div>
+                <div class="workspace-file-list">
+                    ${trees.map((tree) => `
+                        <button type="button" class="workspace-file-row"
+                            data-project-id="${escapeHtml(projectName)}"
+                            data-tree-name="${escapeHtml(tree.treeName)}">
+                            <div class="workspace-file-name text-truncate" title="${escapeHtml(tree.treeName)}">
+                                ${escapeHtml(tree.treeName)}
+                                <div class="workspace-file-subtitle">${escapeHtml(projectLabel)}</div>
+                            </div>
+                            <div class="small text-muted">${escapeHtml(tree.time_str || '')}</div>
+                            <div><span class="badge bg-primary-subtle text-primary border">${escapeHtml((tree.plotType || 'normalTree').replace('Tree', ''))}</span></div>
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+
+        return `
+            <section class="workspace-project-card">
+                <div class="workspace-project-header">
+                    <div>
+                        <div class="workspace-project-title">${escapeHtml(projectLabel)}</div>
+                        <div class="workspace-project-meta">${escapeHtml(projectName)}</div>
+                    </div>
+                    <span class="badge rounded-pill text-bg-light border">${trees.length}</span>
+                </div>
+                ${bodyHtml}
+            </section>
+        `;
+    });
+
+    updateWorkspaceSummary(visibleCount, allTrees.length);
+    container.innerHTML = cards.filter(Boolean).join('') || `<div class="workspace-empty-state">${escapeHtml(t('workspaceEmptyProject'))}</div>`;
+}
+
+async function fetchWorkspaceTreeList(forceRefresh = false) {
+    if (workspaceBrowserState.loaded && !forceRefresh) {
+        renderWorkspaceBrowser();
+        return;
+    }
+    workspaceBrowserState.loading = true;
+    renderWorkspaceLoading();
+    try {
+        const res = await fetch('/tvbot/getTreeList');
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        workspaceBrowserState.treeList = Array.isArray(data.treeList) ? data.treeList : [];
+        workspaceBrowserState.projectList = Array.isArray(data.projectList) ? data.projectList : [];
+        workspaceBrowserState.loaded = true;
+    } catch (err) {
+        const { container } = getWorkspaceControls();
+        if (container) {
+            container.innerHTML = `<div class="workspace-empty-state text-danger">${escapeHtml(t('workspaceLoadFailed', err.message))}</div>`;
+        }
+        updateWorkspaceSummary(0, 0);
+        workspaceBrowserState.loaded = false;
+        return;
+    } finally {
+        workspaceBrowserState.loading = false;
+    }
+    renderWorkspaceBrowser();
+}
+
+window.openWorkspaceModal = function(targetType) {
     const modalEl = getWorkspaceModal();
-    modalEl.dataset.targetTree = String(treeNum);
+    workspaceBrowserState.targetType = String(targetType || '1');
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
-
-    fetch('/tvbot/getTreeList')
-        .then((res) => {
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-            return res.json();
-        })
-        .then((data) => {
-            const container = document.getElementById('workspaceAccordion');
-            container.innerHTML = '';
-
-            const allTrees = Array.isArray(data.treeList) ? data.treeList : [];
-            const projects = Array.isArray(data.projectList) ? data.projectList : [];
-
-            if (projects.length === 0) {
-                container.innerHTML = '<div class="p-3 text-center text-muted">No projects found in workspace.</div>';
-                return;
-            }
-
-            projects.forEach((project, index) => {
-                const projectName = project.projectId;
-                const trees = allTrees.filter((item) => item.projectId === projectName);
-                const expanded = '';
-                const collapsedBtn = 'collapsed';
-
-                let bodyHtml = '<div class="list-group list-group-flush">';
-                if (trees.length === 0) {
-                    bodyHtml += '<div class="list-group-item text-muted small py-2">Empty project</div>';
-                } else {
-                    // Header for columns
-                    bodyHtml += `
-                        <div class="list-group-item bg-light text-muted small fw-semibold d-flex align-items-center py-2" style="font-size: 0.8rem;">
-                            <div class="flex-grow-1">Name</div>
-                            <div style="width: 140px;">Date Modified</div>
-                            <div style="width: 80px;">Layout</div>
-                        </div>
-                    `;
-                    
-                    // Sort trees by mtime descending by default
-                    trees.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
-                    
-                    trees.forEach((tree) => {
-                        bodyHtml += `
-                            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center py-2"
-                                data-project-id="${escapeHtml(projectName)}"
-                                data-tree-name="${escapeHtml(tree.treeName)}">
-                                <div class="flex-grow-1 text-truncate pe-2" title="${escapeHtml(tree.treeName)}">
-                                    <i class="bi bi-file-earmark-text text-primary me-2"></i>${escapeHtml(tree.treeName)}
-                                </div>
-                                <div style="width: 140px;" class="text-muted small text-truncate">${escapeHtml(tree.time_str || '')}</div>
-                                <div style="width: 80px;" class="text-muted small">
-                                    <span class="badge bg-secondary bg-opacity-25 text-light">${escapeHtml((tree.plotType || 'normal').replace('Tree', ''))}</span>
-                                </div>
-                            </button>
-                        `;
-                    });
-                }
-                bodyHtml += '</div>';
-
-                container.insertAdjacentHTML('beforeend', `
-                    <div class="accordion-item" style="border-color: rgba(255,255,255,0.1); background: var(--surface);">
-                        <h2 class="accordion-header" id="heading-${index}">
-                            <button class="accordion-button py-2 ${collapsedBtn}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${index}" style="background: rgba(255,255,255,0.02); color: var(--text-main);">
-                                <i class="bi bi-folder-fill text-warning me-2"></i>
-                                <span class="fw-bold">${escapeHtml(project.projectName || projectName)}</span>
-                                <span class="badge bg-secondary ms-2 rounded-pill">${trees.length}</span>
-                            </button>
-                        </h2>
-                        <div id="collapse-${index}" class="accordion-collapse collapse ${expanded}" data-bs-parent="#workspaceAccordion">
-                            <div class="accordion-body p-0">${bodyHtml}</div>
-                        </div>
-                    </div>
-                `);
-            });
-        })
-        .catch((err) => {
-            document.getElementById('workspaceAccordion').innerHTML = `<div class="p-3 text-center text-danger">Failed to load workspace data: ${escapeHtml(err.message)}</div>`;
-        });
+    renderWorkspaceLoading();
+    fetchWorkspaceTreeList(false);
 };
 
 window.selectWorkspaceTree = async function(dataObj) {
     const { projectId, treeName } = dataObj;
     const modalEl = getWorkspaceModal();
-    const treeNum = Number(modalEl.dataset.targetTree || '1');
+    const targetType = workspaceBrowserState.targetType;
 
+    if (targetType === 'comparison') {
+        const dataUrl = `/api/get_tree/${encodeURIComponent(projectId)}/${encodeURIComponent(treeName)}.json`;
+        window.history.replaceState({}, '', `?originalJsonDataUri=${encodeURIComponent(dataUrl)}&projectId=${encodeURIComponent(projectId)}&treeTitle=${encodeURIComponent(treeName)}`);
+        initTanglegramFromUrl();
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        return;
+    }
+
+    const treeNum = Number(targetType || '1');
     try {
         const { payload } = await fetchTreePayload(projectId, treeName);
         setWorkspaceSelection(treeNum, projectId, treeName, payload);
         const modal = bootstrap.Modal.getInstance(modalEl);
         if (modal) modal.hide();
     } catch (err) {
-        alert(`Failed to load tree from workspace: ${err.message}`);
+        alert(t('workspaceSelectFailed', err.message));
     }
 };
 
@@ -1235,6 +1598,55 @@ document.getElementById('workspaceAccordion').addEventListener('click', function
         projectId: button.dataset.projectId,
         treeName: button.dataset.treeName
     });
+});
+
+document.getElementById('workspace-search').addEventListener('input', function(event) {
+    workspaceBrowserState.search = String(event.target.value || '');
+    renderWorkspaceBrowser();
+});
+
+document.getElementById('workspace-sort-by').addEventListener('change', function(event) {
+    workspaceBrowserState.sortBy = String(event.target.value || 'mtime');
+    renderWorkspaceBrowser();
+});
+
+document.getElementById('workspace-sort-dir').addEventListener('click', function() {
+    workspaceBrowserState.sortDir = workspaceBrowserState.sortDir === 'desc' ? 'asc' : 'desc';
+    renderWorkspaceBrowser();
+});
+
+document.getElementById('workspace-refresh').addEventListener('click', function() {
+    fetchWorkspaceTreeList(true);
+});
+
+document.getElementById('file-comparison').addEventListener('change', async function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        const text = await file.text();
+        const payload = JSON.parse(text);
+        if (payload.plotType !== 'tanglegramTree') {
+            alert(t('loadedNotTanglegram'));
+            return;
+        }
+
+        // Create a local blob URL for the comparison JSON
+        const blob = new Blob([text], { type: 'application/json' });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Use history to trigger the loading logic
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('originalJsonDataUri', blobUrl);
+        window.history.replaceState({}, '', newUrl.toString());
+        
+        initTanglegramFromUrl();
+        
+        const labelEl = document.getElementById('label-comparison');
+        if (labelEl) labelEl.textContent = `[Local: ${file.name}]`;
+    } catch (err) {
+        alert(t('saveFailed', err.message));
+    }
 });
 
 document.getElementById('file1').addEventListener('change', async function(event) {
@@ -1252,11 +1664,11 @@ document.getElementById('file1').addEventListener('change', async function(event
             projectId: 'local',
             plotType,
             dataUrl: blobUrl,
-            sourceLabel: 'Local JSON',
+            sourceLabel: t('localSource'),
             localBlobUrl: blobUrl
         });
     } catch (err) {
-        alert(`左侧 JSON 读取失败：${err.message}`);
+        alert(t('leftJsonReadFailed', err.message));
     }
 });
 
@@ -1275,11 +1687,11 @@ document.getElementById('file2').addEventListener('change', async function(event
             projectId: 'local',
             plotType,
             dataUrl: blobUrl,
-            sourceLabel: 'Local JSON',
+            sourceLabel: t('localSource'),
             localBlobUrl: blobUrl
         });
     } catch (err) {
-        alert(`右侧 JSON 读取失败：${err.message}`);
+        alert(t('rightJsonReadFailed', err.message));
     }
 });
 
@@ -1289,9 +1701,9 @@ document.getElementById('btn-manual-mode').addEventListener('click', function() 
     pendingSelection = null;
     updateManualModeButton();
     if (manualConnectMode) {
-        setStatus('手动连线模式已开启。请先点左侧或右侧树上的 leaf / folded clade 标签，再点另一侧对应标签完成连线。');
+        setStatus(t('manualStatusOn'));
     } else {
-        setStatus('手动连线模式已关闭。当前统一画布支持平移/缩放和连线；单击连线可选中，双击连线可删除。');
+        setStatus(t('manualStatusOff'));
     }
 });
 document.getElementById('btn-box-delete-mode').addEventListener('click', function() {
@@ -1299,9 +1711,9 @@ document.getElementById('btn-box-delete-mode').addEventListener('click', functio
     updateBoxDeleteModeButton();
     setupBoxDeleteInteraction();
     if (boxDeleteMode) {
-        setStatus('框选删线模式已开启。按住鼠标左键在画布中拖出矩形，可批量删除命中的连线。');
+        setStatus(t('boxDeleteStatusOn'));
     } else {
-        setStatus('框选删线模式已关闭。');
+        setStatus(t('boxDeleteStatusOff'));
     }
 });
 document.getElementById('btn-toggle-pan').addEventListener('click', function() {
@@ -1309,9 +1721,9 @@ document.getElementById('btn-toggle-pan').addEventListener('click', function() {
     updatePanLockButton();
     ensureCombinedZoom();
     if (canvasPanLocked) {
-        setStatus('画布移动已锁定。你仍可进行连线、框选删线和导出操作。');
+        setStatus(t('panStatusLocked'));
     } else {
-        setStatus('画布移动已解锁。可继续拖动画布与滚轮缩放。');
+        setStatus(t('panStatusUnlocked'));
     }
 });
 document.getElementById('btn-auto-connect').addEventListener('click', autoConnectByName);
@@ -1322,7 +1734,7 @@ document.getElementById('btn-clear-connections').addEventListener('click', funct
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
-    setStatus('已清空所有连线。');
+    setStatus(t('clearedConnections'));
 });
 document.getElementById('btn-export-svg').addEventListener('click', exportCombinedSvg);
 document.getElementById('btn-export-pdf').addEventListener('click', exportCombinedPdf);
@@ -1380,36 +1792,121 @@ document.getElementById('line-opacity').addEventListener('input', function() {
         refreshLayoutControlLabels();
         redrawCombinedCanvas();
         if (ensureFramesReady()) {
-            setStatus('已更新双树布局。你可以继续调节右树的左右/上下偏移，让 leaf-to-leaf 连线更贴近。');
+            setStatus(t('layoutUpdated'));
         }
     });
 });
 
 window.addEventListener('resize', drawConnections);
+window.addEventListener('languageChanged', function() {
+    updateManualModeButton();
+    updateBoxDeleteModeButton();
+    updatePanLockButton();
+    updateStyleHint();
+    updateTreeSummary(1);
+    updateTreeSummary(2);
+    renderWorkspaceBrowser();
+    updateWorkspaceSortDirButton();
+});
 updateConnectionList();
 syncStyleControlsFromSelection();
 syncLayoutInputsFromState();
 updateManualModeButton();
 updateBoxDeleteModeButton();
 updatePanLockButton();
-setStatus('先分别选择左侧和右侧的 Workspace JSON 文件，再加载双树。当前是同一张合成画布；支持平移/缩放，连线端点圆点会直接显示。');
+setStatus(t('initialStatus'));
 
 // ---------------------------
 // Save & Load Tanglegram logic
 // ---------------------------
 
-async function saveTanglegram() {
-    if (!selectedTrees[1] || !selectedTrees[2]) {
-        alert(currentLang === 'en' ? 'Please load both trees first.' : '请先加载双树。');
-        return;
-    }
-    
-    if (selectedTrees[1].projectId === 'local' || selectedTrees[2].projectId === 'local') {
-        alert(currentLang === 'en' ? 'Cannot save local files. Please import trees from Workspace.' : '包含本地文件，无法保存到 Workspace。请从 Workspace 导入树。');
+async function updateSaveModalExistingFiles() {
+    const folderSelect = document.getElementById('save-folder-select').value;
+    const folderNew = document.getElementById('save-folder-new').value.trim();
+    const saveProject = folderNew || folderSelect;
+    const container = document.getElementById('save-existing-files');
+    const warning = document.getElementById('overwrite-warning');
+    const filenameInput = document.getElementById('save-filename');
+
+    if (!saveProject) {
+        container.innerHTML = `<div class="text-muted italic">Select a folder to see existing files</div>`;
+        warning.classList.add('d-none');
         return;
     }
 
-    const treeName = prompt(currentLang === 'en' ? 'Enter a name to save this comparison:' : '请输入保存的文件名：', 'my_comparison');
+    const files = workspaceBrowserState.treeList.filter(t => t.projectId === saveProject).map(t => t.treeName);
+    if (files.length === 0) {
+        container.innerHTML = `<div class="text-muted small">No files in this folder</div>`;
+    } else {
+        container.innerHTML = files.map(f => `<div class="text-truncate" title="${escapeHtml(f)}">${escapeHtml(f)}.json</div>`).join('');
+    }
+
+    const currentFilename = filenameInput.value.trim();
+    if (currentFilename && files.includes(currentFilename)) {
+        warning.classList.remove('d-none');
+    } else {
+        warning.classList.add('d-none');
+    }
+}
+
+async function openSaveModal() {
+    if (!selectedTrees[1] || !selectedTrees[2]) {
+        alert(t('saveLoadBoth'));
+        return;
+    }
+    if (selectedTrees[1].projectId === 'local' || selectedTrees[2].projectId === 'local') {
+        alert(t('saveNoLocal'));
+        return;
+    }
+
+    const modalEl = getSaveModal();
+    const modal = new bootstrap.Modal(modalEl);
+    
+    // Populate folder select
+    const select = document.getElementById('save-folder-select');
+    select.innerHTML = '';
+    
+    const projects = Array.isArray(workspaceBrowserState.projectList) ? workspaceBrowserState.projectList : [];
+    if (projects.length === 0) {
+        // Fetch list if not loaded
+        await fetchWorkspaceTreeList(false);
+    }
+    
+    workspaceBrowserState.projectList.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.projectId;
+        opt.textContent = p.projectName || p.projectId;
+        select.appendChild(opt);
+    });
+
+    // Default values
+    const defProj = getDefaultSaveProject();
+    if (workspaceBrowserState.projectList.some(p => p.projectId === defProj)) {
+        select.value = defProj;
+    }
+    
+    document.getElementById('save-filename').value = makeExportBaseName();
+    document.getElementById('save-folder-new').value = '';
+    
+    updateSaveModalExistingFiles();
+    modal.show();
+}
+
+document.getElementById('save-folder-select').addEventListener('change', updateSaveModalExistingFiles);
+document.getElementById('save-folder-new').addEventListener('input', updateSaveModalExistingFiles);
+document.getElementById('save-filename').addEventListener('input', updateSaveModalExistingFiles);
+
+async function confirmSaveComparison() {
+    const folderSelect = document.getElementById('save-folder-select').value;
+    const folderNew = document.getElementById('save-folder-new').value.trim();
+    const treeName = document.getElementById('save-filename').value.trim();
+    
+    const saveProject = folderNew || folderSelect;
+    if (!saveProject) return;
+    if (!isValidWorkspaceName(saveProject)) {
+        alert(t('saveFolderInvalid'));
+        return;
+    }
     if (!treeName) return;
 
     const payload = {
@@ -1432,12 +1929,7 @@ async function saveTanglegram() {
     };
 
     try {
-        // Find default project logic: TVBOT saves to current projectId from URL or 'default'
-        const urlParams = new URLSearchParams(window.location.search);
-        let saveProject = urlParams.get('projectId') || 'default';
-        if (saveProject === 'local') saveProject = 'default';
-
-        const res = await fetch('/api/save_tree', {
+        const res = await fetch('/tvbot/saveOriginalJsonData', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1448,23 +1940,31 @@ async function saveTanglegram() {
         });
         const data = await res.json();
         if (data.success) {
-            alert(currentLang === 'en' ? 'Saved successfully!' : '保存成功！');
+            alert(t('saveOk'));
+            const modal = bootstrap.Modal.getInstance(getSaveModal());
+            if (modal) modal.hide();
+            
             // update URL so reload works
             const newUrl = new URL(window.location.href);
             newUrl.searchParams.set('originalJsonDataUri', `/api/get_tree/${encodeURIComponent(saveProject)}/${encodeURIComponent(treeName)}.json`);
             newUrl.searchParams.set('projectId', saveProject);
             newUrl.searchParams.set('treeTitle', treeName);
             window.history.replaceState({}, '', newUrl.toString());
+            
+            // refresh workspace list for next time
+            fetchWorkspaceTreeList(true);
         } else {
-            alert('Error: ' + data.error);
+            alert(t('saveError', data.error));
         }
     } catch (err) {
-        alert('Failed to save: ' + err.message);
+        alert(t('saveFailed', err.message));
     }
 }
 
+document.getElementById('btn-confirm-save').addEventListener('click', confirmSaveComparison);
+
 if (document.getElementById('btn-save-workspace')) {
-    document.getElementById('btn-save-workspace').addEventListener('click', saveTanglegram);
+    document.getElementById('btn-save-workspace').addEventListener('click', openSaveModal);
 }
 
 // Check if we need to load an existing tanglegram JSON
@@ -1479,7 +1979,7 @@ async function initTanglegramFromUrl() {
         const payload = await res.json();
         
         if (payload.plotType !== 'tanglegramTree') {
-            console.warn('Loaded JSON is not a tanglegramTree');
+            console.warn(t('loadedNotTanglegram'));
             return;
         }
 
@@ -1502,6 +2002,7 @@ async function initTanglegramFromUrl() {
         }
         if (payload.defaultConnectionStyle) {
             Object.assign(defaultConnectionStyle, payload.defaultConnectionStyle);
+            syncStyleControlsFromSelection();
         }
 
         if (leftRes && rightRes) {
@@ -1538,4 +2039,3 @@ async function initTanglegramFromUrl() {
 
 // Call init on load
 initTanglegramFromUrl();
-

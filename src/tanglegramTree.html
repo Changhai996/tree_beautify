@@ -118,6 +118,119 @@
             border-radius: 10px;
             padding: 10px 12px;
         }
+
+        .workspace-modal-dialog {
+            max-width: 980px;
+        }
+
+        .workspace-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 14px 16px;
+            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+        }
+
+        .workspace-toolbar .form-control,
+        .workspace-toolbar .form-select {
+            font-size: 13px;
+        }
+
+        .workspace-summary {
+            font-size: 12px;
+            color: #64748b;
+            margin-left: auto;
+        }
+
+        .workspace-project-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            margin: 14px 16px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+        }
+
+        .workspace-project-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .workspace-project-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .workspace-project-meta {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .workspace-file-list {
+            max-height: 380px;
+            overflow: auto;
+        }
+
+        .workspace-file-head,
+        .workspace-file-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.6fr) 170px 110px;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .workspace-file-head {
+            padding: 10px 14px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: #64748b;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .workspace-file-row {
+            width: 100%;
+            border: 0;
+            background: #ffffff;
+            text-align: left;
+            padding: 12px 14px;
+            border-bottom: 1px solid #eef2f7;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+
+        .workspace-file-row:hover {
+            background: #f8fbff;
+        }
+
+        .workspace-file-name {
+            min-width: 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .workspace-file-subtitle {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .workspace-empty-state {
+            padding: 28px 16px;
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+        }
     </style>
 </head>
 
@@ -128,10 +241,21 @@
             <h5 class="fw-bold mb-0" data-i18n="tg_title">Dual-Tree Comparison</h5>
             <div class="d-flex gap-2">
                 <button id="btn-save-workspace" class="btn btn-sm btn-primary shadow-sm" style="font-size: 0.8rem;">
-                    <i class="bi bi-save me-1"></i><span data-i18n="tg_save">Save</span>
+                    <span data-i18n="tg_save">Save</span>
                 </button>
                 <button id="lang-toggle" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem;">🌐 中文</button>
             </div>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label fw-bold text-primary" data-i18n="tg_load_comparison">Load Saved Comparison</label>
+            <div class="d-grid gap-2">
+                <button class="btn btn-outline-primary btn-sm" onclick="openWorkspaceModal('comparison')">
+                    <span data-i18n="tg_select_comparison">Import Comparison from Workspace</span>
+                </button>
+                <input type="file" class="form-control form-control-sm" id="file-comparison" accept=".json,application/json">
+            </div>
+            <div class="mt-2 small text-primary fw-bold" id="label-comparison"></div>
         </div>
 
         <div class="mb-4">
@@ -203,8 +327,8 @@
         <div class="border rounded p-3 mb-4 bg-light">
             <h6 class="fw-bold mb-3" data-i18n="tg_layout_adj">Tree Layout Adjustment</h6>
             <div class="mb-3">
-                <label class="form-label small mb-1"><span data-i18n="tg_right_x">Right Tree X</span> <span id="layout-right-x-value">0</span></label>
-                <input type="range" class="form-range" id="layout-right-x" min="-1800" max="1800" step="10" value="0">
+                <label class="form-label small mb-1"><span data-i18n="tg_right_x">Right Tree X</span> <span id="layout-right-x-value">-1000</span></label>
+                <input type="range" class="form-range" id="layout-right-x" min="-1800" max="1800" step="10" value="-1000">
             </div>
             <div class="mb-1">
                 <label class="form-label small mb-1"><span data-i18n="tg_right_y">Right Tree Y</span> <span id="layout-right-y-value">0</span></label>
@@ -252,14 +376,75 @@
     </main>
 </div>
 
+<div class="modal fade" id="saveComparisonModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" data-i18n="tg_save_modal_title">Save Comparison to Workspace</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold" data-i18n="tg_save_folder">Target Folder (Project)</label>
+                    <div class="input-group input-group-sm mb-2">
+                        <select id="save-folder-select" class="form-select"></select>
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <input id="save-folder-new" type="text" class="form-control" data-i18n-placeholder="tg_new_folder_placeholder" placeholder="Or enter a new folder name">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold" data-i18n="tg_existing_files">Existing Files in Folder</label>
+                    <div id="save-existing-files" class="border rounded p-2 bg-light small" style="max-height: 120px; overflow-y: auto;">
+                        <div class="text-muted italic">Select a folder to see existing files</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold" data-i18n="tg_save_filename">Filename</label>
+                    <div class="input-group input-group-sm">
+                        <input id="save-filename" type="text" class="form-control" data-i18n-placeholder="tg_filename_placeholder" placeholder="Enter filename">
+                        <span class="input-group-text">.json</span>
+                    </div>
+                    <div id="overwrite-warning" class="text-danger small mt-1 d-none">
+                        <span data-i18n="tg_overwrite_warn">File already exists. Saving will overwrite it.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal" data-i18n="tg_cancel">Cancel</button>
+                <button id="btn-confirm-save" type="button" class="btn btn-sm btn-primary">
+                    <span data-i18n="tg_confirm_save">Confirm Save</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="workspaceModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-scrollable workspace-modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" data-i18n="tg_modal_title">Select Tree JSON from Workspace</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body p-0">
+            <div class="workspace-toolbar">
+                <div class="input-group input-group-sm" style="flex: 1 1 260px; min-width: 220px;">
+                    <input id="workspace-search" type="text" class="form-control" data-i18n-placeholder="tg_search_placeholder" placeholder="Search files or projects">
+                </div>
+                <select id="workspace-sort-by" class="form-select form-select-sm" style="width: 170px;">
+                    <option value="mtime" data-i18n="tg_sort_mtime">Modified Time</option>
+                    <option value="name" data-i18n="tg_sort_name">File Name</option>
+                    <option value="plotType" data-i18n="tg_sort_layout">Layout</option>
+                </select>
+                <button id="workspace-sort-dir" type="button" class="btn btn-sm btn-outline-secondary">
+                    <span data-i18n="tg_sort_desc">Descending</span>
+                </button>
+                <button id="workspace-refresh" type="button" class="btn btn-sm btn-outline-primary">
+                    <span data-i18n="tg_refresh">Refresh</span>
+                </button>
+                <div id="workspace-summary" class="workspace-summary"></div>
+            </div>
+            <div class="modal-body p-0" id="workspace-modal-body">
                 <div class="accordion accordion-flush" id="workspaceAccordion">
                     <div class="p-3 text-center text-muted">
                         <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
@@ -306,6 +491,24 @@
             tg_not_loaded: "Not Loaded",
             tg_open_solo: "Open Alone",
             tg_modal_title: "Select Tree JSON from Workspace",
+            tg_search_placeholder: "Search files or projects",
+            tg_sort_mtime: "Modified Time",
+            tg_sort_name: "File Name",
+            tg_sort_layout: "Layout",
+            tg_sort_desc: "Descending",
+            tg_sort_asc: "Ascending",
+            tg_refresh: "Refresh",
+            tg_existing_files: "Existing Files in Folder",
+            tg_overwrite_warn: "File already exists. Saving will overwrite it.",
+            tg_load_comparison: "Load Saved Comparison",
+            tg_select_comparison: "Import Comparison from Workspace",
+            tg_save_modal_title: "Save Comparison to Workspace",
+            tg_save_folder: "Target Folder (Project)",
+            tg_new_folder_placeholder: "Or enter a new folder name",
+            tg_save_filename: "Filename",
+            tg_filename_placeholder: "Enter filename",
+            tg_cancel: "Cancel",
+            tg_confirm_save: "Confirm Save",
             lang_label: "🌐 中文"
         },
         zh: {
@@ -338,6 +541,24 @@
             tg_not_loaded: "尚未加载",
             tg_open_solo: "单独打开",
             tg_modal_title: "从 Workspace 选择树 JSON",
+            tg_search_placeholder: "搜索项目或文件名",
+            tg_sort_mtime: "按修改时间",
+            tg_sort_name: "按文件名",
+            tg_sort_layout: "按布局类型",
+            tg_sort_desc: "降序",
+            tg_sort_asc: "升序",
+            tg_refresh: "刷新",
+            tg_existing_files: "文件夹中已有文件",
+            tg_overwrite_warn: "文件名已存在，保存将覆盖原文件。",
+            tg_load_comparison: "加载已保存的比较",
+            tg_select_comparison: "从 Workspace 导入比较文件",
+            tg_save_modal_title: "保存比较结果到工作区",
+            tg_save_folder: "目标文件夹 (项目)",
+            tg_new_folder_placeholder: "或输入新文件夹名",
+            tg_save_filename: "文件名",
+            tg_filename_placeholder: "输入文件名",
+            tg_cancel: "取消",
+            tg_confirm_save: "确认保存",
             lang_label: "🌐 English"
         }
     };
@@ -350,6 +571,12 @@
             const key = el.getAttribute('data-i18n');
             if (tgTranslations[lang] && tgTranslations[lang][key]) {
                 el.innerHTML = tgTranslations[lang][key];
+            }
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            if (tgTranslations[lang] && tgTranslations[lang][key]) {
+                el.setAttribute('placeholder', tgTranslations[lang][key]);
             }
         });
         const toggleBtn = document.getElementById('lang-toggle');

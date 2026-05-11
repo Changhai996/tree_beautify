@@ -106,9 +106,25 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
             padding: 6px 12px !important;
         }
+        #project-manager-box .row {
+            margin-right: 0 !important;
+            margin-left: 0 !important;
+        }
+        #project-manager-box .col-auto {
+            padding-right: 4px !important;
+            padding-left: 4px !important;
+        }
+        #project-manager-box .mybutton {
+            white-space: nowrap !important;
+            min-width: 72px !important;
+            height: 32px !important;
+            padding: 0 12px !important;
+        }
         /* Project Manager Box Title Input Width */
         #project-manager-box input {
-            min-width: 500px !important;
+            min-width: 190px !important;
+            width: min(42vw, 420px) !important;
+            max-width: 100% !important;
             font-size: 16px !important;
             font-weight: 600 !important;
             color: #2d3748 !important;
@@ -123,7 +139,8 @@
             line-height: 1.5 !important;
             padding-top: 2px !important;
             padding-bottom: 2px !important;
-            min-width: 180px !important;
+            min-width: 160px !important;
+            max-width: 260px !important;
         }
         
         /* Canvas Resize Handles Visibility */
@@ -738,11 +755,13 @@
   padding-bottom: 2px !important;
 }
 #project-manager-box select {
-  min-width: 180px !important;
-  max-width: 300px !important;
+  min-width: 160px !important;
+  max-width: 260px !important;
 }
 #project-manager-box input {
-  min-width: 500px !important;
+  min-width: 190px !important;
+  width: min(42vw, 420px) !important;
+  max-width: 100% !important;
   font-size: 16px !important;
   font-weight: bold !important;
 }
@@ -4496,7 +4515,8 @@
                 if (projectSelect && !document.getElementById('local-project-controls')) {
                     const btnContainer = document.createElement('div');
                     btnContainer.id = 'local-project-controls';
-                    btnContainer.className = 'd-flex align-items-center ms-1 gap-1';
+                    btnContainer.className = 'd-flex align-items-center flex-wrap ms-1 gap-1';
+                    btnContainer.style.maxWidth = "100%";
                     
                     // New Project Button
                     const newBtn = document.createElement('button');
@@ -4505,7 +4525,8 @@
                     newBtn.innerText = '+ New';
                     newBtn.title = "Create New Project Folder";
                     newBtn.style.height = "30px";
-                    newBtn.style.padding = "0 8px";
+                    newBtn.style.padding = "0 10px";
+                    newBtn.style.whiteSpace = "nowrap";
                     newBtn.onclick = async (e) => {
                         e.preventDefault();
                         const name = prompt("Enter new project/folder name:");
@@ -4529,7 +4550,8 @@
                     renameBtn.innerText = 'Rename';
                     renameBtn.title = "Rename Selected Project Folder";
                     renameBtn.style.height = "30px";
-                    renameBtn.style.padding = "0 8px";
+                    renameBtn.style.padding = "0 10px";
+                    renameBtn.style.whiteSpace = "nowrap";
                     renameBtn.onclick = async (e) => {
                         e.preventDefault();
                         const app = el.__vue_app__ ? el.__vue_app__._instance.proxy : el.__vue__;
@@ -4563,7 +4585,8 @@
                     delBtn.innerText = 'Delete';
                     delBtn.title = "Delete Selected Project Folder";
                     delBtn.style.height = "30px";
-                    delBtn.style.padding = "0 8px";
+                    delBtn.style.padding = "0 10px";
+                    delBtn.style.whiteSpace = "nowrap";
                     delBtn.onclick = async (e) => {
                         e.preventDefault();
                         const app = el.__vue_app__ ? el.__vue_app__._instance.proxy : el.__vue__;
@@ -4598,6 +4621,8 @@
                     
                     projectSelect.parentNode.style.display = "flex";
                     projectSelect.parentNode.style.alignItems = "center";
+                    projectSelect.parentNode.style.flexWrap = "wrap";
+                    projectSelect.parentNode.style.gap = "6px";
                     projectSelect.parentNode.appendChild(btnContainer);
                 }
 

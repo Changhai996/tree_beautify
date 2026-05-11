@@ -78,14 +78,14 @@ def save_original_json_data():
     try:
         data = request.json
         tree_name = data.get('treeName', 'unnamed_tree')
-        project_id = data.get('projectId', 'default')
+        project_id = _normalize_project_name(data.get('projectId', 'default'))
         if project_id is None:
             project_id = 'default'
-        project_id_str = str(project_id).strip()
-        if project_id_str.lower() in ['default', 'default project', '']:
-            project_id = 'default'
-        else:
-            project_id = project_id_str
+        if not _is_valid_project_name(project_id):
+            return jsonify({"success": False, "error": "Invalid project name"}), 400
+        tree_name = os.path.basename(str(tree_name).strip())
+        if not tree_name or tree_name in ['.', '..'] or tree_name.startswith('.'):
+            return jsonify({"success": False, "error": "Invalid file name"}), 400
         json_data_raw = data.get('jsonData')
         
         # Determine the target folder (project)

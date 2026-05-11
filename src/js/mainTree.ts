@@ -2,16 +2,16 @@
 
 import { MainPlot } from "./mainplot.ts";
 import { TreeParser } from "./treeParser.ts";
-const project_manager_T = `<div id="project-manager-box" style="padding: 0.5em;">
-    <div class="row g-3 align-items-center" v-show="isShow">
+const project_manager_T = `<div id="project-manager-box" style="padding: 0.5em;max-width: calc(100vw - 24px);">
+    <div class="row g-2 align-items-center flex-wrap" v-show="isShow">
   <div class="col-auto">
-  <button @click="toMyTrees" class="mybutton cuIcon-forwardfill" style="background-color: #66c2a5;width: auto;padding: 0 10px;height: 30px;">My trees</button>
+  <button @click="toMyTrees" class="mybutton cuIcon-forwardfill" style="background-color: #66c2a5;width: auto;min-width: 86px;padding: 0 12px;height: 32px;white-space: nowrap;">My trees</button>
   </div>
   <div class="col-auto">
     <label for="inputPassword6" class="col-form-label">Project</label>
   </div>
   <div class="col-auto">
-    <select class="form-select" v-model="currentProjectIndex" aria-label="Default select example">
+    <select class="form-select" style="min-width: 170px;max-width: 260px;" v-model="currentProjectIndex" aria-label="Default select example">
   <option :value="index" v-for="(op,index) in projectList" >{{op.projectName}}</option>
   
 </select>
@@ -20,10 +20,10 @@ const project_manager_T = `<div id="project-manager-box" style="padding: 0.5em;"
     <label for="inputPassword6" class="col-form-label">Title</label>
   </div>
   <div class="col-auto">
-    <input  id="inputPassword6" style="width: 500px;" v-model="treeTitle" class="form-control" >
+    <input id="inputPassword6" style="width: min(42vw, 420px);min-width: 190px;max-width: 100%;" v-model="treeTitle" class="form-control">
   </div>
   <div class="col-auto">
-  <button @click="save" class="mybutton" style="background-color: #66c2a5;width: 60px;height: 30px;">Save</button>
+  <button @click="save" class="mybutton" style="background-color: #66c2a5;min-width: 72px;padding: 0 12px;height: 32px;white-space: nowrap;">Save</button>
   </div>
   <div class="col-auto">
   <button @click="isPin = !isPin" class="mybutton" style="background-color: #ffffff;width: 36px;height: 36px;padding: 0;display: flex;align-items: center;justify-content: center;cursor: pointer;"><svg style="cursor: pointer !important;" t="1674964096661" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="3238" width="22" height="22"><path d="M631.637333 178.432a64 64 0 0 1 19.84 13.504l167.616 167.786667a64 64 0 0 1-19.370666 103.744l-59.392 26.304-111.424 111.552-8.832 122.709333a64 64 0 0 1-109.098667 40.64l-108.202667-108.309333-184.384 185.237333-45.354666-45.162667 184.490666-185.344-111.936-112.021333a64 64 0 0 1 40.512-109.056l126.208-9.429333 109.44-109.568 25.706667-59.306667a64 64 0 0 1 84.181333-33.28z" :fill="isPin ? '#66c2a5':'#cccccc'" p-id="3239"></path></svg></button>
@@ -4478,14 +4478,34 @@ class MainTree extends MainPlot {
           },
           copyChildrenNodeID(e) {
             let matched = false;
+            const pickLeafId = (nodeData) => {
+              if (!nodeData) return "";
+              return String(
+                nodeData.name ||
+                  nodeData.uniformNodeId ||
+                  nodeData.id ||
+                  nodeData.leafName ||
+                  "",
+              ).trim();
+            };
+            const collectLeafIdsFromRawData = (nodeData, output = []) => {
+              if (!nodeData) return output;
+              if (Array.isArray(nodeData.children) && nodeData.children.length > 0) {
+                nodeData.children.forEach((child) =>
+                  collectLeafIdsFromRawData(child, output),
+                );
+                return output;
+              }
+              const leafId = pickLeafId(nodeData);
+              leafId && output.push(leafId);
+              return output;
+            };
             c.treeHierarchy.descendants().forEach((e) => {
               if (!matched && e.data.nodeIndex == c.styleData.currentNodeIndex) {
                 matched = true;
+                const leafIds = collectLeafIdsFromRawData(e.data, []);
                 c.copyText(
-                  e
-                    .leaves()
-                    .map((e) => e.data.name)
-                    .join("\n"),
+                  leafIds.join("\n"),
                 );
                 c.showMessageBox();
               }

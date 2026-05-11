@@ -4,6 +4,7 @@
   "description": "A high-performance, local application for phylogenetic tree visualization, annotation, and publication-ready rendering.",
   "main": "index.js",
   "scripts": {
+    "start": "python start.py",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
