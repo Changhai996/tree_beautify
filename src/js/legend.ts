@@ -1,9 +1,9 @@
-// @ts-nocheck
-
-
-
 class Legend {
-    constructor(mainPlot) {
+    [key: string]: any;
+    mainPlot: any;
+    legendControlDataDict: Record<string, any>;
+
+    constructor(mainPlot: any) {
         this.mainPlot = mainPlot
         this.legendControlDataDict = {
             "baseCategoryLegend": function (idSuffix=""){
@@ -2228,7 +2228,7 @@ class Legend {
         let translateX = 0
 
         categoryList.forEach((ele,i)=>{
-            let col_index = parseInt(i/rows)
+            let col_index = Math.floor(i/rows)
             if(i%rows == 0){
                 if(col_index>0){
                     translateX += this.getTextWidth(col_data[col_index-1].maxLengthName,fontSize)
@@ -2250,12 +2250,12 @@ class Legend {
         return col_data
     }
     drawBaseCategoryLegend(legendControlData,
-                               categoryList,
-                               colorScale,
-                               legendDragData,
+                               categoryList: any,
+                               colorScale: any,
+                               legendDragData: any,
                            {patternScale,
                            shape="rect"
-                           }={}){
+                           }: { patternScale?: any; shape?: string } = {}){
 
 
 
@@ -2337,12 +2337,12 @@ class Legend {
 
     }
     drawCategoryGeneLegend(legendControlData,
-                           categoryList,
-                           colorScale,
-                           legendDragData,
+                           categoryList: any,
+                           colorScale: any,
+                           legendDragData: any,
                            {patternScale,
                                shape="rect"
-                           }={}){
+                           }: { patternScale?: any; shape?: string } = {}){
 
 
 
