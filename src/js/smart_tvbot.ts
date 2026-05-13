@@ -1,5 +1,6 @@
 // @ts-nocheck
 
+import { applyPdfExportFixesToSvg } from "../core/export/pdfFixes.ts";
 
 // TVBOT Bootstrap Defaults: Text, size 3, x -3, y -3
 (function() {
@@ -1466,6 +1467,8 @@
         if (doc.__tvbot_embedFontFamily) {
             exportSvg.setAttribute('font-family', doc.__tvbot_embedFontFamily);
         }
+
+        applyPdfExportFixesToSvg(exportSvg, { labelParenthesisNbspCount: 2 });
 
         return doc.svg(exportSvg, { width: width, height: height }).then(() => {
             doc.save(fileName + ".pdf");

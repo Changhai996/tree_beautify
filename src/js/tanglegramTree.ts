@@ -1,5 +1,7 @@
 // @ts-nocheck
 
+import { applyPdfExportFixesToSvg } from "../core/export/pdfFixes.ts";
+
 console.log("Tanglegram iframe comparison module loaded.");
 
 const selectedTrees = { 1: null, 2: null };
@@ -816,28 +818,9 @@ async function exportCombinedPdf() {
         const doc = new jsPDF(width > height ? 'l' : 'p', 'pt', [width, height]);
         const exportSvg = cloneSvgWithComputedStyles(svgElement);
 
-        // Fix overlap and right-tree mirroring issues for PDF export
-        exportSvg.querySelectorAll('text').forEach((textEl) => {
-            const rawText = textEl.textContent || '';
-            // 1. Fix ID and parentheses overlap by ensuring a clear gap
-            if (rawText.includes('(') && rawText.includes(')')) {
-                // If it looks like "Name (Count)", add extra spaces before the parenthesis
-                textEl.textContent = rawText.replace(/(\S+)\s*\(([^)]+)\)/g, '$1   ($2)');
-            }
-
-            // 2. Fix Right Tree mirrored labels specifically for svg2pdf
-            const parentGroup = textEl.closest('#tg-tree-2');
-            if (parentGroup) {
-                const anchor = textEl.getAttribute('text-anchor') || '';
-                const dx = getNumericSvgAttr(textEl, 'dx', 0);
-                // For right tree, we typically have text-anchor: end.
-                // In PDF, we nudge it slightly more to avoid tree overlap.
-                if (anchor === 'end') {
-                    textEl.setAttribute('dx', String(dx - 6));
-                } else if (anchor === 'start') {
-                    textEl.setAttribute('dx', String(dx + 6));
-                }
-            }
+        applyPdfExportFixesToSvg(exportSvg, {
+            labelParenthesisNbspCount: 2,
+            rightTreeDxNudge: 6
         });
 
         await doc.svg(exportSvg, { width, height });
