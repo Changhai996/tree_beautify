@@ -3,8 +3,8 @@
 class TreeParser {
   constructor() {}
   identifyTreeFile(t) {
-    if ((console.log(t), "object" == typeof t))
-      return (console.log({ aa: t }), this.parsePhyloxml(t));
+    if ("object" == typeof t)
+      return this.parsePhyloxml(t);
     {
       let e = t.trim().split("\n");
       return e[0].trim().toUpperCase().startsWith("#NEXUS")

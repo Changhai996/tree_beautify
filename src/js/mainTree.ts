@@ -1,7 +1,8 @@
 // @ts-nocheck
 
 import { MainPlot } from "./mainplot.ts";
-import { TreeParser } from "./treeParser.ts";
+import { TreeParser } from "../core/tree/parserFacade.ts";
+import { collectLeafIdsFromRawTree } from "../core/tree/leafIds.ts";
 const project_manager_T = `<div id="project-manager-box" style="padding: 0.5em;max-width: calc(100vw - 24px);">
     <div class="row g-2 align-items-center flex-wrap" v-show="isShow">
   <div class="col-auto">
@@ -4478,32 +4479,10 @@ class MainTree extends MainPlot {
           },
           copyChildrenNodeID(e) {
             let matched = false;
-            const pickLeafId = (nodeData) => {
-              if (!nodeData) return "";
-              return String(
-                nodeData.name ||
-                  nodeData.uniformNodeId ||
-                  nodeData.id ||
-                  nodeData.leafName ||
-                  "",
-              ).trim();
-            };
-            const collectLeafIdsFromRawData = (nodeData, output = []) => {
-              if (!nodeData) return output;
-              if (Array.isArray(nodeData.children) && nodeData.children.length > 0) {
-                nodeData.children.forEach((child) =>
-                  collectLeafIdsFromRawData(child, output),
-                );
-                return output;
-              }
-              const leafId = pickLeafId(nodeData);
-              leafId && output.push(leafId);
-              return output;
-            };
             c.treeHierarchy.descendants().forEach((e) => {
               if (!matched && e.data.nodeIndex == c.styleData.currentNodeIndex) {
                 matched = true;
-                const leafIds = collectLeafIdsFromRawData(e.data, []);
+                const leafIds = collectLeafIdsFromRawTree(e.data);
                 c.copyText(
                   leafIds.join("\n"),
                 );
