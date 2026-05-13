@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import { applyPdfExportFixesToSvg } from "../core/export/pdfFixes.ts";
 import { cloneSvgWithComputedStyles } from "../core/export/inlineComputedStyles.ts";
 import { computeTanglegramCombinedLayout } from "../core/export/tanglegramLayout.ts";
@@ -215,7 +213,7 @@ function normalizePlotType(plotType) {
 }
 
 function getTreeFrame(treeNum) {
-    return document.getElementById(`tree-frame-${treeNum}`);
+    return document.getElementById(`tree-frame-${treeNum}`) as HTMLIFrameElement | null;
 }
 
 function getTitleText(treeNum) {
@@ -230,21 +228,21 @@ function setStatus(message) {
 
 function getStyleInputs() {
     return {
-        color: document.getElementById('line-color'),
-        width: document.getElementById('line-width'),
-        opacity: document.getElementById('line-opacity'),
-        widthValue: document.getElementById('line-width-value'),
-        opacityValue: document.getElementById('line-opacity-value'),
-        hint: document.getElementById('style-hint')
+        color: document.getElementById('line-color') as HTMLInputElement,
+        width: document.getElementById('line-width') as HTMLInputElement,
+        opacity: document.getElementById('line-opacity') as HTMLInputElement,
+        widthValue: document.getElementById('line-width-value') as HTMLElement,
+        opacityValue: document.getElementById('line-opacity-value') as HTMLElement,
+        hint: document.getElementById('style-hint') as HTMLElement
     };
 }
 
 function getLayoutInputs() {
     return {
-        rightX: document.getElementById('layout-right-x'),
-        rightY: document.getElementById('layout-right-y'),
-        rightXValue: document.getElementById('layout-right-x-value'),
-        rightYValue: document.getElementById('layout-right-y-value')
+        rightX: document.getElementById('layout-right-x') as HTMLInputElement,
+        rightY: document.getElementById('layout-right-y') as HTMLInputElement,
+        rightXValue: document.getElementById('layout-right-x-value') as HTMLElement,
+        rightYValue: document.getElementById('layout-right-y-value') as HTMLElement
     };
 }
 
@@ -258,19 +256,22 @@ function updateStyleHint() {
 }
 
 function updateManualModeButton() {
-    const button = document.getElementById('btn-manual-mode');
+    const button = document.getElementById('btn-manual-mode') as HTMLButtonElement | null;
+    if (!button) return;
     button.className = manualConnectMode ? 'btn btn-success' : 'btn btn-outline-success';
     button.textContent = manualConnectMode ? t('manualModeOn') : t('manualModeOff');
 }
 
 function updateBoxDeleteModeButton() {
-    const button = document.getElementById('btn-box-delete-mode');
+    const button = document.getElementById('btn-box-delete-mode') as HTMLButtonElement | null;
+    if (!button) return;
     button.className = boxDeleteMode ? 'btn btn-danger' : 'btn btn-outline-danger';
     button.textContent = boxDeleteMode ? t('boxDeleteOn') : t('boxDeleteOff');
 }
 
 function updatePanLockButton() {
-    const button = document.getElementById('btn-toggle-pan');
+    const button = document.getElementById('btn-toggle-pan') as HTMLButtonElement | null;
+    if (!button) return;
     button.className = canvasPanLocked ? 'btn btn-info' : 'btn btn-outline-info';
     button.textContent = canvasPanLocked ? t('panLocked') : t('panUnlocked');
 }
@@ -301,8 +302,8 @@ function syncStyleControlsFromSelection() {
         : tgStore.state.defaultStyle;
 
     inputs.color.value = style.color;
-    inputs.width.value = style.width;
-    inputs.opacity.value = style.opacity;
+    inputs.width.value = String(style.width);
+    inputs.opacity.value = String(style.opacity);
     refreshStyleControlLabels();
     updateStyleHint();
 }
@@ -328,7 +329,7 @@ function updateTreeSummary(treeNum) {
     const labelEl = document.getElementById(`label-tree${treeNum}`);
     const titleEl = document.getElementById(`tree-title-${treeNum}`);
     const sourceEl = document.getElementById(`tree-source-${treeNum}`);
-    const openBtn = document.getElementById(`open-tree-${treeNum}`);
+    const openBtn = document.getElementById(`open-tree-${treeNum}`) as HTMLButtonElement | null;
 
     if (labelEl) labelEl.textContent = tree ? `[${tree.treeName}]` : '';
     if (titleEl) titleEl.textContent = tree ? tree.treeName : getTitleText(treeNum);
@@ -367,7 +368,7 @@ async function fetchTreePayload(projectId, treeName) {
 
 function attachFrameChrome(treeNum) {
     const tree = selectedTrees[treeNum];
-    const openBtn = document.getElementById(`open-tree-${treeNum}`);
+    const openBtn = document.getElementById(`open-tree-${treeNum}`) as HTMLButtonElement | null;
     if (openBtn) {
         openBtn.onclick = function() {
             if (tree && tree.renderUrl) window.open(tree.renderUrl, '_blank');
@@ -375,7 +376,7 @@ function attachFrameChrome(treeNum) {
     }
 }
 
-function prepareEmbeddedFrame(frame) {
+function prepareEmbeddedFrame(frame: HTMLIFrameElement) {
     try {
         const doc = frame.contentDocument;
         if (!doc) return;
@@ -398,8 +399,12 @@ function prepareEmbeddedFrame(frame) {
 }
 
 function waitForTreeRender(treeNum, timeoutMs = 15000) {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
         const frame = getTreeFrame(treeNum);
+        if (!frame) {
+            reject(new Error('iframe not found.'));
+            return;
+        }
         const startedAt = Date.now();
 
         const poll = () => {
@@ -420,7 +425,7 @@ function waitForTreeRender(treeNum, timeoutMs = 15000) {
                 if (hasTreeNodes) {
                     const loadingBox = doc.getElementById('page-loading-box');
                     if (loadingBox) loadingBox.style.display = 'none';
-                    resolve();
+                    resolve(undefined);
                     return;
                 }
 
@@ -443,13 +448,17 @@ function waitForTreeRender(treeNum, timeoutMs = 15000) {
 }
 
 function waitForEmbeddedStyleApply(treeNum, timeoutMs = 4000) {
-    return new Promise((resolve) => {
+    return new Promise<void>((resolve) => {
         const frame = getTreeFrame(treeNum);
+        if (!frame) {
+            resolve(undefined);
+            return;
+        }
         const startedAt = Date.now();
 
         const poll = () => {
             try {
-                const win = frame && frame.contentWindow;
+                const win = frame.contentWindow;
                 const app = win && (win.normalTree || win.circleTree || win.unrootedTree);
                 const api = win && win.__tvbot_node_style_api;
                 const branchStyles = Array.isArray(app?.styleData?.tvbotBranchStyles) ? app.styleData.tvbotBranchStyles : [];
@@ -459,15 +468,15 @@ function waitForEmbeddedStyleApply(treeNum, timeoutMs = 4000) {
                 if (api && typeof api.apply === 'function') {
                     api.apply();
                     if (!hasCustomStyles) {
-                        resolve();
+                        resolve(undefined);
                         return;
                     }
 
-                    const svg = frame.contentDocument && frame.contentDocument.getElementById('svg');
+                    const svg = frame.contentDocument && (frame.contentDocument.getElementById('svg') as unknown as SVGSVGElement | null);
                     const hasStyledLeaf = !!(svg && svg.querySelector('[data-tvbot-leaf-styled="1"]'));
                     const hasStyledBranch = !!(svg && svg.querySelector('[data-tvbot-branch-styled="1"]'));
                     if (hasStyledLeaf || hasStyledBranch) {
-                        resolve();
+                        resolve(undefined);
                         return;
                     }
                 }
@@ -475,7 +484,7 @@ function waitForEmbeddedStyleApply(treeNum, timeoutMs = 4000) {
             }
 
             if (Date.now() - startedAt > timeoutMs) {
-                resolve();
+                resolve(undefined);
                 return;
             }
             window.setTimeout(poll, 120);
@@ -488,7 +497,7 @@ function waitForEmbeddedStyleApply(treeNum, timeoutMs = 4000) {
 function resizeFrameToContent(treeNum) {
     try {
         const frame = getTreeFrame(treeNum);
-        const doc = frame.contentDocument;
+        const doc = frame?.contentDocument;
         if (!doc) return;
 
         const svg = doc.getElementById('svg');
@@ -524,14 +533,14 @@ function makeExportBaseName() {
 }
 
 function loadScriptOnce(src) {
-    return new Promise((resolve, reject) => {
-        const existing = document.querySelector(`script[src="${src}"]`);
+    return new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
         if (existing) {
             if (existing.dataset.loaded === '1') {
-                resolve();
+                resolve(undefined);
                 return;
             }
-            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('load', () => resolve(undefined), { once: true });
             existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
             return;
         }
@@ -540,7 +549,7 @@ function loadScriptOnce(src) {
         script.async = true;
         script.onload = () => {
             script.dataset.loaded = '1';
-            resolve();
+            resolve(undefined);
         };
         script.onerror = () => reject(new Error(`Failed to load ${src}`));
         document.head.appendChild(script);
@@ -587,7 +596,7 @@ function getDefaultSaveProject() {
     return 'comparisons';
 }
 
-function buildTargetRecord(treeNum, datum, element, kindHint) {
+function buildTargetRecord(treeNum, datum, element: Element, kindHint?: string) {
     if (!datum) return null;
 
     if (datum.data) {
@@ -616,11 +625,11 @@ function buildTargetRecord(treeNum, datum, element, kindHint) {
 }
 
 function getCombinedSvg() {
-    return document.getElementById('combined-svg');
+    return document.getElementById('combined-svg') as unknown as SVGSVGElement | null;
 }
 
 function getCombinedLayer(layerId) {
-    return document.getElementById(layerId);
+    return document.getElementById(layerId) as unknown as SVGGElement | null;
 }
 
 function ensureCombinedZoom() {
@@ -650,15 +659,16 @@ function ensureCombinedZoom() {
 
 function annotateSourceTargets(treeNum) {
     const frame = getTreeFrame(treeNum);
-    const doc = frame.contentDocument;
+    const doc = frame?.contentDocument;
     if (!doc) return;
 
     Array.from(doc.querySelectorAll('#maingroup g')).forEach((element) => {
-        const record = buildTargetRecord(treeNum, element.__data__, element);
+        const g = element as unknown as SVGGElement & { __data__?: unknown };
+        const record = buildTargetRecord(treeNum, (g as any).__data__, g);
         if (!record || !record.explicitName) return;
         if (record.kind !== 'leaf' && record.kind !== 'folded-clade') return;
 
-        Array.from(element.querySelectorAll('text')).forEach((textEl) => {
+        Array.from(g.querySelectorAll('text')).forEach((textEl) => {
             textEl.setAttribute('data-tg-role', 'label');
             textEl.setAttribute('data-tg-tree', String(treeNum));
             textEl.setAttribute('data-tg-kind', record.kind);
@@ -672,15 +682,18 @@ function annotateSourceTargets(treeNum) {
 function getCombinedTargets(treeNum) {
     const svg = getCombinedSvg();
     if (!svg) return [];
-    return Array.from(svg.querySelectorAll(`[data-tg-role="label"][data-tg-tree="${treeNum}"]`)).map((element) => ({
-        treeNum,
-        kind: element.getAttribute('data-tg-kind'),
-        key: element.getAttribute('data-tg-key'),
-        name: element.getAttribute('data-tg-name'),
-        nodeId: element.getAttribute('data-tg-node-id'),
-        explicitName: true,
-        element
-    }));
+    return Array.from(svg.querySelectorAll(`[data-tg-role="label"][data-tg-tree="${treeNum}"]`)).map((element) => {
+        const el = element as SVGTextElement;
+        return {
+            treeNum,
+            kind: el.getAttribute('data-tg-kind'),
+            key: el.getAttribute('data-tg-key'),
+            name: el.getAttribute('data-tg-name'),
+            nodeId: el.getAttribute('data-tg-node-id'),
+            explicitName: true,
+            element: el
+        };
+    });
 }
 
 function findTargetElement(treeNum, key) {
@@ -692,7 +705,8 @@ function getAnchorElement(treeNum, key) {
 }
 
 function getOverlayRect() {
-    return getCombinedSvg().getBoundingClientRect();
+    const svg = getCombinedSvg();
+    return svg ? svg.getBoundingClientRect() : null;
 }
 
 function getViewportLocalPointFromElement(element, treeNum) {
@@ -737,8 +751,8 @@ function syncOverlaySize() {
     const width = Math.max(shell.clientWidth - 40, 1200);
     const height = Math.max(shell.clientHeight - 80, 800);
     overlay.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    overlay.setAttribute('width', width);
-    overlay.setAttribute('height', height);
+    overlay.setAttribute('width', String(width));
+    overlay.setAttribute('height', String(height));
 }
 
 function removeConnectionAt(index) {
@@ -760,7 +774,7 @@ function getExportPrepWorker() {
 function runExportPrepInWorker(svgString, pdfFixes) {
     const worker = getExportPrepWorker();
     const requestId = `${Date.now()}-${++exportPrepRequestSeq}`;
-    return new Promise((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
         const handler = (event) => {
             if (!event || !event.data || event.data.id !== requestId) return;
             worker.removeEventListener('message', handler);
@@ -809,7 +823,7 @@ async function exportCombinedPdf() {
             const raw = new XMLSerializer().serializeToString(exportSvg);
             const fixed = await runExportPrepInWorker(raw, { labelParenthesisNbspCount: 2, rightTreeDxNudge: 6 });
             const parsed = new DOMParser().parseFromString(fixed, 'image/svg+xml');
-            svgForPdf = parsed.documentElement;
+            svgForPdf = parsed.documentElement as unknown as SVGSVGElement;
         } catch (e) {
             applyPdfExportFixesToSvg(exportSvg, { labelParenthesisNbspCount: 2, rightTreeDxNudge: 6 });
             svgForPdf = exportSvg;
@@ -1236,11 +1250,11 @@ function ensureFramesReady() {
 }
 
 function loadTreeIntoFrame(treeNum) {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
         const frame = getTreeFrame(treeNum);
         const tree = selectedTrees[treeNum];
         if (!frame || !tree) {
-            resolve();
+            resolve(undefined);
             return;
         }
 
@@ -1249,7 +1263,7 @@ function loadTreeIntoFrame(treeNum) {
                 prepareEmbeddedFrame(frame);
                 await waitForTreeRender(treeNum);
                 await waitForEmbeddedStyleApply(treeNum);
-                resolve();
+                resolve(undefined);
             } catch (err) {
                 reject(err);
             }
@@ -1312,7 +1326,7 @@ function getAutoMatchWorker() {
 function runAutoMatchInWorker(left, right) {
     const worker = getAutoMatchWorker();
     const requestId = `${Date.now()}-${++autoMatchRequestSeq}`;
-    return new Promise((resolve) => {
+    return new Promise<{ leftKey: string; rightKey: string }[]>((resolve) => {
         const handler = (event) => {
             if (!event || !event.data || event.data.id !== requestId) return;
             worker.removeEventListener('message', handler);
@@ -1389,11 +1403,11 @@ function setWorkspaceSelection(treeNum, projectId, treeName, payload) {
 
 function getWorkspaceControls() {
     return {
-        container: document.getElementById('workspaceAccordion'),
-        summary: document.getElementById('workspace-summary'),
-        search: document.getElementById('workspace-search'),
-        sortBy: document.getElementById('workspace-sort-by'),
-        sortDir: document.getElementById('workspace-sort-dir')
+        container: document.getElementById('workspaceAccordion') as HTMLElement | null,
+        summary: document.getElementById('workspace-summary') as HTMLElement | null,
+        search: document.getElementById('workspace-search') as HTMLInputElement | null,
+        sortBy: document.getElementById('workspace-sort-by') as HTMLSelectElement | null,
+        sortDir: document.getElementById('workspace-sort-dir') as HTMLButtonElement | null
     };
 }
 
@@ -1588,7 +1602,8 @@ window.selectWorkspaceTree = async function(dataObj) {
 };
 
 document.getElementById('workspaceAccordion').addEventListener('click', function(event) {
-    const button = event.target.closest('button[data-project-id][data-tree-name]');
+    const target = event.target as Element | null;
+    const button = (target ? target.closest('button[data-project-id][data-tree-name]') : null) as HTMLButtonElement | null;
     if (!button) return;
 
     window.selectWorkspaceTree({
@@ -1598,12 +1613,14 @@ document.getElementById('workspaceAccordion').addEventListener('click', function
 });
 
 document.getElementById('workspace-search').addEventListener('input', function(event) {
-    workspaceBrowserState.search = String(event.target.value || '');
+    const input = event.target as HTMLInputElement | null;
+    workspaceBrowserState.search = String(input?.value || '');
     renderWorkspaceBrowser();
 });
 
 document.getElementById('workspace-sort-by').addEventListener('change', function(event) {
-    workspaceBrowserState.sortBy = String(event.target.value || 'mtime');
+    const select = event.target as HTMLSelectElement | null;
+    workspaceBrowserState.sortBy = String(select?.value || 'mtime');
     renderWorkspaceBrowser();
 });
 
@@ -1617,7 +1634,8 @@ document.getElementById('workspace-refresh').addEventListener('click', function(
 });
 
 document.getElementById('file-comparison').addEventListener('change', async function(event) {
-    const file = event.target.files[0];
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files ? input.files[0] : null;
     if (!file) return;
 
     try {
@@ -1647,7 +1665,8 @@ document.getElementById('file-comparison').addEventListener('change', async func
 });
 
 document.getElementById('file1').addEventListener('change', async function(event) {
-    const file = event.target.files[0];
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files ? input.files[0] : null;
     if (!file) return;
 
     try {
@@ -1670,7 +1689,8 @@ document.getElementById('file1').addEventListener('change', async function(event
 });
 
 document.getElementById('file2').addEventListener('change', async function(event) {
-    const file = event.target.files[0];
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files ? input.files[0] : null;
     if (!file) return;
 
     try {
@@ -1737,7 +1757,8 @@ document.getElementById('btn-export-svg').addEventListener('click', exportCombin
 document.getElementById('btn-export-pdf').addEventListener('click', exportCombinedPdf);
 
 document.getElementById('connection-list').addEventListener('click', function(event) {
-    const row = event.target.closest('[data-role="connection-row"]');
+    const target = event.target as Element | null;
+    const row = (target ? target.closest('[data-role="connection-row"]') : null) as HTMLElement | null;
     if (!row) return;
     tgStore.select(Number(row.dataset.idx));
     updateConnectionList();
@@ -1782,7 +1803,8 @@ document.getElementById('line-opacity').addEventListener('input', function() {
     ['layout-right-y', 'rightY']
 ].forEach(([elementId, stateKey]) => {
     document.getElementById(elementId).addEventListener('input', function(event) {
-        layoutState[stateKey] = Number(event.target.value);
+        const input = event.target as HTMLInputElement | null;
+        layoutState[stateKey] = Number(input?.value);
         refreshLayoutControlLabels();
         redrawCombinedCanvas();
         if (ensureFramesReady()) {
@@ -1815,12 +1837,14 @@ setStatus(t('initialStatus'));
 // ---------------------------
 
 async function updateSaveModalExistingFiles() {
-    const folderSelect = document.getElementById('save-folder-select').value;
-    const folderNew = document.getElementById('save-folder-new').value.trim();
+    const folderSelectEl = document.getElementById('save-folder-select') as HTMLSelectElement;
+    const folderNewEl = document.getElementById('save-folder-new') as HTMLInputElement;
+    const folderSelect = folderSelectEl.value;
+    const folderNew = folderNewEl.value.trim();
     const saveProject = folderNew || folderSelect;
-    const container = document.getElementById('save-existing-files');
-    const warning = document.getElementById('overwrite-warning');
-    const filenameInput = document.getElementById('save-filename');
+    const container = document.getElementById('save-existing-files') as HTMLElement;
+    const warning = document.getElementById('overwrite-warning') as HTMLElement;
+    const filenameInput = document.getElementById('save-filename') as HTMLInputElement;
 
     if (!saveProject) {
         container.innerHTML = `<div class="text-muted italic">Select a folder to see existing files</div>`;
@@ -1857,7 +1881,7 @@ async function openSaveModal() {
     const modal = new bootstrap.Modal(modalEl);
     
     // Populate folder select
-    const select = document.getElementById('save-folder-select');
+    const select = document.getElementById('save-folder-select') as HTMLSelectElement;
     select.innerHTML = '';
     
     const projects = Array.isArray(workspaceBrowserState.projectList) ? workspaceBrowserState.projectList : [];
@@ -1879,8 +1903,8 @@ async function openSaveModal() {
         select.value = defProj;
     }
     
-    document.getElementById('save-filename').value = makeExportBaseName();
-    document.getElementById('save-folder-new').value = '';
+    (document.getElementById('save-filename') as HTMLInputElement).value = makeExportBaseName();
+    (document.getElementById('save-folder-new') as HTMLInputElement).value = '';
     
     updateSaveModalExistingFiles();
     modal.show();
@@ -1891,9 +1915,9 @@ document.getElementById('save-folder-new').addEventListener('input', updateSaveM
 document.getElementById('save-filename').addEventListener('input', updateSaveModalExistingFiles);
 
 async function confirmSaveComparison() {
-    const folderSelect = document.getElementById('save-folder-select').value;
-    const folderNew = document.getElementById('save-folder-new').value.trim();
-    const treeName = document.getElementById('save-filename').value.trim();
+    const folderSelect = (document.getElementById('save-folder-select') as HTMLSelectElement).value;
+    const folderNew = (document.getElementById('save-folder-new') as HTMLInputElement).value.trim();
+    const treeName = (document.getElementById('save-filename') as HTMLInputElement).value.trim();
     
     const saveProject = folderNew || folderSelect;
     if (!saveProject) return;

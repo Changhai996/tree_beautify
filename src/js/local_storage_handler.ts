@@ -1,7 +1,4 @@
-// @ts-nocheck
-
-// Local storage handler to save and load data from local Flask server
-(function() {
+(() => {
     const LOCAL_API_SAVE = '/api/save_tree';
     
     function addSaveButton() {
@@ -29,20 +26,23 @@
     }
 
     function saveCurrentState() {
-        let projectData = null;
+        let projectData: Record<string, unknown> | null = null;
         
         // Try to get data from the app instance
-        if (window.normalTree && typeof window.normalTree.exportOriginalJsonData === 'function') {
-            projectData = window.normalTree.exportOriginalJsonData(true);
+        const app = window.normalTree as unknown as { exportOriginalJsonData?: (includeStyle: boolean) => unknown } | undefined;
+        if (app && typeof app.exportOriginalJsonData === 'function') {
+            const raw = app.exportOriginalJsonData(true);
+            if (raw && typeof raw === 'object') projectData = raw as Record<string, unknown>;
         }
 
         if (!projectData) {
             // Fallback to localStorage if app instance not found
             const keys = Object.keys(localStorage);
-            projectData = {};
+            projectData = {} as Record<string, unknown>;
             keys.forEach(key => {
                 try {
-                    projectData[key] = JSON.parse(localStorage.getItem(key));
+                    const item = localStorage.getItem(key);
+                    projectData[key] = item == null ? null : JSON.parse(item);
                 } catch (e) {
                     projectData[key] = localStorage.getItem(key);
                 }
@@ -68,11 +68,11 @@
             })
         })
         .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Project saved successfully to local data folder as ' + data.filename);
+        .then((data: any) => {
+            if (data && data.success) {
+                alert('Project saved successfully to local data folder as ' + String(data.filename || filename));
             } else {
-                alert('Error saving project: ' + data.error);
+                alert('Error saving project: ' + String(data?.error || 'unknown error'));
             }
         })
         .catch(error => {
@@ -89,9 +89,9 @@
         if (localDataFile) {
             fetch('/api/get_tree/' + localDataFile)
                 .then(response => response.json())
-                .then(data => {
+                .then((data: any) => {
                     // Restore data to localStorage
-                    Object.keys(data).forEach(key => {
+                    Object.keys(data || {}).forEach(key => {
                         const val = typeof data[key] === 'object' ? JSON.stringify(data[key]) : data[key];
                         localStorage.setItem(key, val);
                     });
