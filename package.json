@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "format": "prettier . --write",
     "test": "vitest run",
+    "check": "npm run typecheck:legacy && npm run typecheck:strict && npm test && npm run build",
     "build": "npm run typecheck:legacy && vite build",
     "preview": "vite preview"
   },
