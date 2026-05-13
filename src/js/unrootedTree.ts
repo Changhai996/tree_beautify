@@ -1,23 +1,23 @@
-// @ts-nocheck
-
 import {
   MainTree,
   maxLength,
   getNodeHeight,
 } from "./mainTree.ts";
 import { BarPlot } from "./barPlot.ts";
-import { hull } from "./hull.js";
+import hull from "./hull.js";
 import { splitPath } from "./splitPath.ts";
 class NormalTree extends MainTree {
+  [key: string]: any;
   constructor() {
-    (super("treefile"),
+    (super(),
       (this.barPlot = new BarPlot(this)),
       (this.plotType = "unrootedTree"),
       this.creatVueApp());
   }
-  init(t, a, e) {
+  init(...args: any[]) {
+    let [t, a, e] = args;
     ("attrChanged" == t && "Branches sorting" == e) || "originalJsonData" == t
-      ? this.reRootTree(
+      ? (this.reRootTree as any)(
           this.styleData.rootNodeIndex,
           this.styleData.rootOffsetRate,
         )
@@ -37,7 +37,7 @@ class NormalTree extends MainTree {
               (this.figureData.branches.Bootstraps.to.value = 0)),
           this.Vue.$refs.controlPlane.$forceUpdate()),
         this.zoomG.text(""),
-        super.init(t),
+        (super.init as any)(...args),
         (this.outerRadius = this.innerwidth),
         console.log(this.treeHierarchy),
         (this.polarGroup = this.maingroup
@@ -144,34 +144,35 @@ class NormalTree extends MainTree {
         ((t.startAngle = s),
           (t.endAngle = s + (i * t.leaves().length) / n),
           (t.middleAngle = (t.startAngle + t.endAngle) / 2));
-        var a = 90 - i / 2 + (i * t.leaves().length) / n / 2 + h;
+        var angleMid = 90 - i / 2 + (i * t.leaves().length) / n / 2 + h;
         ((h += (i * t.leaves().length) / n),
           o.parent
-            ? ((t.middleAngle = a),
+            ? ((t.middleAngle = angleMid),
               (t.absoluteAngle = t.middleAngle + o.absoluteAngle - 90))
             : ((o.absolutePosition = { x: 0, y: 0 }),
               (o.absoluteAngle = 0),
               (t.absoluteAngle = t.middleAngle + o.absoluteAngle)));
-        var e = this.figureData.branches.Branches["ignore-length"].value
-            ? this.outerRadius / getNodeHeight(this.root)
-            : t.data.length * this.treeScale,
-          a = [
-            { angle: 0, radius: 0 },
-            { angle: (t.middleAngle * Math.PI) / 180, radius: e },
-          ];
-        t.unrootedRadius = e;
-        let l = d(a),
-          r = [];
-        r =
+        const segmentLength = this.figureData.branches.Branches["ignore-length"]
+          .value
+          ? this.outerRadius / getNodeHeight(this.root)
+          : t.data.length * this.treeScale;
+        const polarPoints = [
+          { angle: 0, radius: 0 },
+          { angle: (t.middleAngle * Math.PI) / 180, radius: segmentLength },
+        ];
+        t.unrootedRadius = segmentLength;
+        const pathStr = d(polarPoints);
+        const parts =
           "linear" == c
-            ? l.split("L")[1].split(",")
-            : l.split("C")[1].split(",").slice(-2);
-        ((e = Number(r[0])), (a = Number(r[1])));
+            ? pathStr.split("L")[1].split(",")
+            : pathStr.split("C")[1].split(",").slice(-2);
+        const dx = Number(parts[0]);
+        const dy = Number(parts[1]);
         (o.parent
-          ? (t.absolutePosition = this.getAbsolutePosition(o, e, a))
+          ? (t.absolutePosition = this.getAbsolutePosition(o, dx, dy))
           : (t.absolutePosition = {
-              x: o.absolutePosition.x + e,
-              y: o.absolutePosition.y + a,
+              x: o.absolutePosition.x + dx,
+              y: o.absolutePosition.y + dy,
             }),
           (s = t.endAngle),
           t.children && u(t, t.startAngle, t.endAngle));
@@ -231,7 +232,7 @@ class NormalTree extends MainTree {
         )
         .attr("class", this.figureData.leaves["Text style"].id)
         .call((t) => {
-          this.drawLeafText(t, "circle");
+          this.drawLeafText(t as any, "circle" as any);
         }),
       i &&
         d
@@ -323,7 +324,7 @@ class NormalTree extends MainTree {
               .call(r.drag())
               .append("text")
               .attr("class", o.id)
-              .text(0 != displayStr ? displayStr : "")
+              .text(displayStr === "" || displayStr === "0" ? "" : displayStr)
               .call((t) => {
                 r.renderAttr(t, o);
               });
@@ -817,7 +818,7 @@ class NormalTree extends MainTree {
         var d = this.layerDataDict[c.layerDataFlieKey].dataSource;
         let r = this.layerDataDict[c.layerDataFlieKey].dataIndex,
           o = d.columns,
-          t = [];
+          t: any = [];
         (this.root.leaves().forEach((l) => {
           if (r.has(l.data.name)) {
             let a = { x: l.x },
@@ -829,8 +830,11 @@ class NormalTree extends MainTree {
               e != c.layerDataColumnsIndex.length && t.push(a));
           }
         }),
-          (t.columns = c.layerDataColumnsIndex.map((t) => o[t])));
-        let a = d3.stack().keys(t.columns).offset(d3.stackOffsetNone)(t);
+          ((t as any).columns = c.layerDataColumnsIndex.map((t) => o[t])));
+        let a = d3
+          .stack()
+          .keys((t as any).columns)
+          .offset(d3.stackOffsetNone)(t);
         (console.log(t), console.log(a));
         d = c.controlData.canvas["Canvas scale"].width.value;
         let e = c.controlData.canvas["Canvas scale"].x.value,
@@ -910,7 +914,7 @@ class NormalTree extends MainTree {
           var l = this.layerDataDict[s.layerDataFlieKey].dataSource;
           let r = this.layerDataDict[s.layerDataFlieKey].dataIndex,
             o = l.columns,
-            n = [];
+            n: any = [];
           (this.root.leaves().forEach((l) => {
             if (r.has(l.data.name)) {
               let a = { leafName: l.data.name },
@@ -922,9 +926,9 @@ class NormalTree extends MainTree {
                 e != s.layerDataColumnsIndex.length && n.push(a));
             }
           }),
-            (n.columns = s.layerDataColumnsIndex.map((t) => o[t])),
+            ((n as any).columns = s.layerDataColumnsIndex.map((t) => o[t])),
             console.log(n));
-          var i = h.getMaxMinValue(n, n.columns),
+          var i = h.getMaxMinValue(n, (n as any).columns),
             c = s.controlData.canvas["Canvas scale"].width.value,
             d = d3
               .scaleLinear()
@@ -934,7 +938,7 @@ class NormalTree extends MainTree {
               .scaleOrdinal()
               .range([s.controlData.box["Box style"].fill.value]);
           let t = n.map((a) => {
-            let e = n.columns.map((t) => a[t]).filter((t) => null != t);
+            let e = (n as any).columns.map((t: any) => a[t]).filter((t: any) => null != t);
             var [t, l, r, o, s] = [0, 0.25, 0.5, 0.75, 1].map((t) =>
               d3.quantile(e, t),
             );
@@ -964,13 +968,13 @@ class NormalTree extends MainTree {
             return e[t];
           };
           ((c.bandwidth = () => a),
-            (t.innerxScale = c),
-            (t.xScale = d),
-            (t.colorScale = l),
-            (t.boxStyle = s.controlData.box["Box style"]),
-            (t.pointStyle = s.controlData.point["Point style"]),
-            (t.significanceStyle = s.controlData.significance),
-            (t.translateX = this.outerRadius + i),
+            (((t as any).innerxScale = c),
+            ((t as any).xScale = d),
+            ((t as any).colorScale = l),
+            ((t as any).boxStyle = s.controlData.box["Box style"]),
+            ((t as any).pointStyle = s.controlData.point["Point style"]),
+            ((t as any).significanceStyle = s.controlData.significance),
+            ((t as any).translateX = this.outerRadius + i)),
             console.log("9kk", s.categoryColorList));
           i = this.polarGroup.append("g");
           (this.addAxis(s.controlData, i, d), h.barPlot.drawCircleBox(i, t));
@@ -1006,19 +1010,19 @@ class NormalTree extends MainTree {
                 var a = s.controlData.link["Link style"]["link-type"],
                   e = { x: i[t.source].x, y: i[t.source].y },
                   l = { x: 0, y: 0 },
-                  t = { x: i[t.target].x, y: i[t.target].y };
+                  p = { x: i[t.target].x, y: i[t.target].y };
                 if (
                   "pure" == o.optionList[o.value] ||
                   (s.controlData.link["Color categories"] &&
                     s.controlData.link["Color categories"].switch.value)
                 )
                   return "arc" == a.optionList[a.value]
-                    ? c([e, l, t])
-                    : c([e, t]);
+                    ? c([e, l, p])
+                    : c([e, p]);
                 let r =
                   "arc" == a.optionList[a.value]
-                    ? splitPath(c, [e, l, t])
-                    : splitPath(c, [e, t]);
+                    ? splitPath(c, [e, l, p])
+                    : splitPath(c, [e, p]);
                 return Array.from(r.split(8));
               });
           if (
@@ -1415,7 +1419,6 @@ class NormalTree extends MainTree {
           let o = d3.scaleBand().domain(e.columns).range([0, h]),
             s = d.controlData.canvas["Canvas scale"].x.value,
             n = o.bandwidth();
-          (s, this.outerRadius, Math.PI, this.root.leaves().length);
           let i = this.polarGroup.append("g"),
             c = d3
               .scaleOrdinal()
@@ -1503,7 +1506,6 @@ class NormalTree extends MainTree {
           let o = d3.scaleBand().domain(e.columns).range([0, h]),
             s = d.controlData.canvas["Canvas scale"].x.value,
             n = o.bandwidth();
-          (s, this.outerRadius, Math.PI, this.root.leaves().length);
           let i = this.polarGroup.append("g"),
             c = d3
               .scaleOrdinal()
@@ -1628,7 +1630,7 @@ class NormalTree extends MainTree {
                 (c = t))),
               s[s.length - 1].node_arr.push(t),
               console.log(t));
-            var l = [
+            const polarPoints = [
               { angle: 0, radius: 0 },
               {
                 angle: (t.middleAngle * Math.PI) / 180,
@@ -1636,12 +1638,12 @@ class NormalTree extends MainTree {
                   t.unrootedRadius + u.controlData.block.block.extension.value,
               },
             ];
-            let r = h(l);
-            var o = r.split("L")[1].split(","),
-              l = Number(o[0]),
-              o = Number(o[1]),
-              { x: l, y: o } = this.getAbsolutePosition(t.parent, l, o);
-            (s[s.length - 1].leafTextEndPositionArr.push([l, o]),
+            let r = h(polarPoints);
+            const coords = r.split("L")[1].split(",");
+            const dx = Number(coords[0]);
+            const dy = Number(coords[1]);
+            const abs = this.getAbsolutePosition(t.parent, dx, dy);
+            (s[s.length - 1].leafTextEndPositionArr.push([abs.x, abs.y]),
               t.depth < i && ((i = t.depth), (c = t)),
               (n = e),
               a == d.length - 1 &&
@@ -1858,8 +1860,8 @@ class NormalTree extends MainTree {
       });
   }
 }
-((window.normalTree = new NormalTree()),
-  normalTree.setExampleData(["/static/Ali/data/NJ_tree.treefile"]));
+const normalTree = ((window as any).normalTree = new NormalTree());
+normalTree.setExampleData(["/static/Ali/data/NJ_tree.treefile"]);
 let queryParams = new URLSearchParams(window.location.search);
 if (queryParams.has("originalJsonDataUri")) {
   let t = queryParams.get("originalJsonDataUri");
@@ -1869,5 +1871,5 @@ if (queryParams.has("originalJsonDataUri")) {
   });
 } else
   d3.text("/static/Ali/data/NJ_tree.treefile").then(function (t) {
-    (normalTree.onLoadNewFile(t), d3.select("#page-loading-box").remove());
+    ((normalTree as any).onLoadNewFile(t), d3.select("#page-loading-box").remove());
   });
