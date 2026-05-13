@@ -1,11 +1,8 @@
-// @ts-nocheck
-
-
 class BarPlot  {
-    constructor(mainPlot) {
+    [key: string]: any;
 
+    constructor(mainPlot: any) {
         this.mainPlot = mainPlot
-
     }
 
     drawHorizontalBar(mainGroup, barData) {
