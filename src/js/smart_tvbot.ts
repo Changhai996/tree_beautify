@@ -1,6 +1,7 @@
 // @ts-nocheck
 
 import { applyPdfExportFixesToSvg } from "../core/export/pdfFixes.ts";
+import { cloneSvgWithComputedStyles } from "../core/export/inlineComputedStyles.ts";
 
 // TVBOT Bootstrap Defaults: Text, size 3, x -3, y -3
 (function() {
@@ -1429,37 +1430,7 @@ import { applyPdfExportFixesToSvg } from "../core/export/pdfFixes.ts";
             }
         };
 
-        const exportSvg = svgElement.cloneNode(true);
-        if (!exportSvg.getAttribute('xmlns')) exportSvg.setAttribute('xmlns', svgNS);
-
-        // Inline computed styles so svg2pdf renders text, colors, and strokes perfectly
-        const originalNodes = Array.from(svgElement.querySelectorAll('*'));
-        const cloneNodes = Array.from(exportSvg.querySelectorAll('*'));
-        
-        for (let i = 0; i < originalNodes.length; i++) {
-            const orig = originalNodes[i];
-            const clone = cloneNodes[i];
-            const cs = window.getComputedStyle(orig);
-            if (cs) {
-                const tag = orig.tagName.toLowerCase();
-                if (tag === 'text' || tag === 'tspan') {
-                    if (!clone.getAttribute('font-family')) clone.setAttribute('font-family', cs.fontFamily);
-                    if (!clone.getAttribute('font-size')) clone.setAttribute('font-size', cs.fontSize);
-                    if (!clone.getAttribute('font-weight')) clone.setAttribute('font-weight', cs.fontWeight);
-                    if (!clone.getAttribute('font-style')) clone.setAttribute('font-style', cs.fontStyle);
-                    if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
-                    if (!clone.getAttribute('text-anchor')) clone.setAttribute('text-anchor', cs.textAnchor || orig.getAttribute('text-anchor'));
-                } else if (tag === 'path' || tag === 'line' || tag === 'rect' || tag === 'circle' || tag === 'polygon') {
-                    if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
-                    if (!clone.getAttribute('stroke')) clone.setAttribute('stroke', cs.stroke);
-                    if (!clone.getAttribute('stroke-width')) clone.setAttribute('stroke-width', cs.strokeWidth);
-                    if (!clone.getAttribute('stroke-dasharray') && cs.strokeDasharray !== 'none') clone.setAttribute('stroke-dasharray', cs.strokeDasharray);
-                }
-                if (!clone.getAttribute('opacity') && cs.opacity !== '1') clone.setAttribute('opacity', cs.opacity);
-                if (!clone.getAttribute('display') && cs.display === 'none') clone.setAttribute('display', cs.display);
-                if (!clone.getAttribute('visibility') && cs.visibility === 'hidden') clone.setAttribute('visibility', cs.visibility);
-            }
-        }
+        const exportSvg = cloneSvgWithComputedStyles(svgElement, { includeDisplayVisibility: true });
 
         await ensureEmbeddedFonts();
         
@@ -1493,35 +1464,7 @@ import { applyPdfExportFixesToSvg } from "../core/export/pdfFixes.ts";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
             
-            const exportSvg = svgElement.cloneNode(true);
-            if (!exportSvg.getAttribute('xmlns')) exportSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-            
-            const originalNodes = Array.from(svgElement.querySelectorAll('*'));
-            const cloneNodes = Array.from(exportSvg.querySelectorAll('*'));
-            for (let i = 0; i < originalNodes.length; i++) {
-                const orig = originalNodes[i];
-                const clone = cloneNodes[i];
-                const cs = window.getComputedStyle(orig);
-                if (cs) {
-                    const tag = orig.tagName.toLowerCase();
-                    if (tag === 'text' || tag === 'tspan') {
-                        if (!clone.getAttribute('font-family')) clone.setAttribute('font-family', cs.fontFamily);
-                        if (!clone.getAttribute('font-size')) clone.setAttribute('font-size', cs.fontSize);
-                        if (!clone.getAttribute('font-weight')) clone.setAttribute('font-weight', cs.fontWeight);
-                        if (!clone.getAttribute('font-style')) clone.setAttribute('font-style', cs.fontStyle);
-                        if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
-                        if (!clone.getAttribute('text-anchor')) clone.setAttribute('text-anchor', cs.textAnchor || orig.getAttribute('text-anchor'));
-                    } else if (tag === 'path' || tag === 'line' || tag === 'rect' || tag === 'circle' || tag === 'polygon') {
-                        if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
-                        if (!clone.getAttribute('stroke')) clone.setAttribute('stroke', cs.stroke);
-                        if (!clone.getAttribute('stroke-width')) clone.setAttribute('stroke-width', cs.strokeWidth);
-                        if (!clone.getAttribute('stroke-dasharray') && cs.strokeDasharray !== 'none') clone.setAttribute('stroke-dasharray', cs.strokeDasharray);
-                    }
-                    if (!clone.getAttribute('opacity') && cs.opacity !== '1') clone.setAttribute('opacity', cs.opacity);
-                    if (!clone.getAttribute('display') && cs.display === 'none') clone.setAttribute('display', cs.display);
-                    if (!clone.getAttribute('visibility') && cs.visibility === 'hidden') clone.setAttribute('visibility', cs.visibility);
-                }
-            }
+            const exportSvg = cloneSvgWithComputedStyles(svgElement, { includeDisplayVisibility: true });
 
             const svgData = new XMLSerializer().serializeToString(exportSvg);
             const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });

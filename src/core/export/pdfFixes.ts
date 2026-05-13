@@ -44,7 +44,8 @@ const replaceTextWithTspans = (
   if (textEl.querySelector("tspan")) return;
   while (textEl.firstChild) textEl.removeChild(textEl.firstChild);
 
-  const doc = svg.ownerDocument || document;
+  const doc = svg.ownerDocument ?? textEl.ownerDocument;
+  if (!doc) return;
   const tspan1 = doc.createElementNS("http://www.w3.org/2000/svg", "tspan");
   tspan1.textContent = main;
   textEl.appendChild(tspan1);
@@ -101,3 +102,18 @@ export const applyPdfExportFixesToSvg = (
   });
 };
 
+export const applyPdfExportFixesToSvgString = (
+  svgString: string,
+  options: PdfExportFixOptions = {},
+): string => {
+  const DOMParserCtor = (globalThis as unknown as { DOMParser?: typeof DOMParser }).DOMParser;
+  const XMLSerializerCtor = (globalThis as unknown as { XMLSerializer?: typeof XMLSerializer }).XMLSerializer;
+  if (!DOMParserCtor || !XMLSerializerCtor) return svgString;
+
+  const doc = new DOMParserCtor().parseFromString(svgString, "image/svg+xml");
+  const root = doc.documentElement as unknown as SVGSVGElement | null;
+  if (!root) return svgString;
+
+  applyPdfExportFixesToSvg(root, options);
+  return new XMLSerializerCtor().serializeToString(root);
+};

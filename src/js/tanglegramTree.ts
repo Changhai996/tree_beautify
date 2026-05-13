@@ -1,15 +1,16 @@
 // @ts-nocheck
 
 import { applyPdfExportFixesToSvg } from "../core/export/pdfFixes.ts";
+import { cloneSvgWithComputedStyles } from "../core/export/inlineComputedStyles.ts";
+import { computeTanglegramCombinedLayout } from "../core/export/tanglegramLayout.ts";
+import { createTanglegramStore } from "../core/tanglegram/store.ts";
 
 console.log("Tanglegram iframe comparison module loaded.");
 
 const selectedTrees = { 1: null, 2: null };
 const localBlobUrls = { 1: null, 2: null };
-let connections = [];
 let pendingSelection = null;
 let overlayTimer = null;
-let selectedConnectionIndex = null;
 let manualConnectMode = false;
 let boxDeleteMode = false;
 let canvasPanLocked = false;
@@ -20,11 +21,11 @@ const layoutState = {
     rightX: -1000,
     rightY: 0
 };
-const defaultConnectionStyle = {
-    color: '#2563eb',
-    width: 2,
-    opacity: 0.7
-};
+const tgStore = createTanglegramStore({ defaultStyle: { color: '#2563eb', width: 2, opacity: 0.7 } });
+let autoMatchWorker = null;
+let autoMatchRequestSeq = 0;
+let exportPrepWorker = null;
+let exportPrepRequestSeq = 0;
 const workspaceBrowserState = {
     loaded: false,
     loading: false,
@@ -249,10 +250,10 @@ function getLayoutInputs() {
 
 function updateStyleHint() {
     const inputs = getStyleInputs();
-    if (selectedConnectionIndex === null) {
+    if (tgStore.state.selectedConnectionIndex === null) {
         inputs.hint.textContent = t('styleHintDefault');
     } else {
-        inputs.hint.textContent = t('styleHintSelected', selectedConnectionIndex + 1);
+        inputs.hint.textContent = t('styleHintSelected', tgStore.state.selectedConnectionIndex + 1);
     }
 }
 
@@ -295,9 +296,9 @@ function syncLayoutInputsFromState() {
 
 function syncStyleControlsFromSelection() {
     const inputs = getStyleInputs();
-    const style = selectedConnectionIndex !== null && connections[selectedConnectionIndex]
-        ? connections[selectedConnectionIndex].style
-        : defaultConnectionStyle;
+    const style = tgStore.state.selectedConnectionIndex !== null && tgStore.state.connections[tgStore.state.selectedConnectionIndex]
+        ? tgStore.state.connections[tgStore.state.selectedConnectionIndex].style
+        : tgStore.state.defaultStyle;
 
     inputs.color.value = style.color;
     inputs.width.value = style.width;
@@ -741,49 +742,34 @@ function syncOverlaySize() {
 }
 
 function removeConnectionAt(index) {
-    if (index < 0 || index >= connections.length) return;
-    const removed = connections[index];
-    connections.splice(index, 1);
-    if (selectedConnectionIndex === index) {
-        selectedConnectionIndex = null;
-    } else if (selectedConnectionIndex !== null && selectedConnectionIndex > index) {
-        selectedConnectionIndex -= 1;
-    }
+    const removed = tgStore.removeAt(index);
+    if (!removed) return;
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
     setStatus(t('removedConnection', removed.left.name, removed.right.name));
 }
 
-function cloneSvgWithComputedStyles(svgElement) {
-    const exportSvg = svgElement.cloneNode(true);
-    if (!exportSvg.getAttribute('xmlns')) exportSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    exportSvg.setAttribute('xml:space', 'preserve');
-    const originalNodes = Array.from(svgElement.querySelectorAll('*'));
-    const cloneNodes = Array.from(exportSvg.querySelectorAll('*'));
-
-    for (let i = 0; i < originalNodes.length; i++) {
-        const orig = originalNodes[i];
-        const clone = cloneNodes[i];
-        const cs = window.getComputedStyle(orig);
-        if (!cs) continue;
-        const tag = orig.tagName.toLowerCase();
-        if (tag === 'text' || tag === 'tspan') {
-            if (!clone.getAttribute('font-family')) clone.setAttribute('font-family', cs.fontFamily);
-            if (!clone.getAttribute('font-size')) clone.setAttribute('font-size', cs.fontSize);
-            if (!clone.getAttribute('font-weight')) clone.setAttribute('font-weight', cs.fontWeight);
-            if (!clone.getAttribute('font-style')) clone.setAttribute('font-style', cs.fontStyle);
-            if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
-            if (!clone.getAttribute('text-anchor')) clone.setAttribute('text-anchor', cs.textAnchor || orig.getAttribute('text-anchor'));
-        } else if (tag === 'path' || tag === 'line' || tag === 'rect' || tag === 'circle' || tag === 'polygon' || tag === 'polyline') {
-            if (!clone.getAttribute('fill')) clone.setAttribute('fill', cs.fill);
-            if (!clone.getAttribute('stroke')) clone.setAttribute('stroke', cs.stroke);
-            if (!clone.getAttribute('stroke-width')) clone.setAttribute('stroke-width', cs.strokeWidth);
-            if (!clone.getAttribute('stroke-dasharray') && cs.strokeDasharray !== 'none') clone.setAttribute('stroke-dasharray', cs.strokeDasharray);
-        }
-        if (!clone.getAttribute('opacity') && cs.opacity !== '1') clone.setAttribute('opacity', cs.opacity);
+function getExportPrepWorker() {
+    if (!exportPrepWorker) {
+        exportPrepWorker = new Worker(new URL('../core/export/exportPrep.worker.ts', import.meta.url), { type: 'module' });
     }
-    return exportSvg;
+    return exportPrepWorker;
+}
+
+function runExportPrepInWorker(svgString, pdfFixes) {
+    const worker = getExportPrepWorker();
+    const requestId = `${Date.now()}-${++exportPrepRequestSeq}`;
+    return new Promise((resolve, reject) => {
+        const handler = (event) => {
+            if (!event || !event.data || event.data.id !== requestId) return;
+            worker.removeEventListener('message', handler);
+            if (event.data.error) reject(new Error(event.data.error));
+            else resolve(event.data.svgString || svgString);
+        };
+        worker.addEventListener('message', handler);
+        worker.postMessage({ id: requestId, svgString, pdfFixes });
+    });
 }
 
 function exportCombinedSvg() {
@@ -816,14 +802,20 @@ async function exportCombinedPdf() {
         const width = Number(svgElement.getAttribute('width')) || 1600;
         const height = Number(svgElement.getAttribute('height')) || 900;
         const doc = new jsPDF(width > height ? 'l' : 'p', 'pt', [width, height]);
-        const exportSvg = cloneSvgWithComputedStyles(svgElement);
+        const exportSvg = cloneSvgWithComputedStyles(svgElement, { includeDisplayVisibility: true });
 
-        applyPdfExportFixesToSvg(exportSvg, {
-            labelParenthesisNbspCount: 2,
-            rightTreeDxNudge: 6
-        });
+        let svgForPdf = exportSvg;
+        try {
+            const raw = new XMLSerializer().serializeToString(exportSvg);
+            const fixed = await runExportPrepInWorker(raw, { labelParenthesisNbspCount: 2, rightTreeDxNudge: 6 });
+            const parsed = new DOMParser().parseFromString(fixed, 'image/svg+xml');
+            svgForPdf = parsed.documentElement;
+        } catch (e) {
+            applyPdfExportFixesToSvg(exportSvg, { labelParenthesisNbspCount: 2, rightTreeDxNudge: 6 });
+            svgForPdf = exportSvg;
+        }
 
-        await doc.svg(exportSvg, { width, height });
+        await doc.svg(svgForPdf, { width, height });
         doc.save(`${makeExportBaseName()}.pdf`);
         setStatus(t('exportedPdf'));
     } catch (err) {
@@ -840,7 +832,7 @@ function drawConnections() {
     lineLayer.selectAll('*').remove();
     endpointLayer.selectAll('*').remove();
 
-    connections.forEach((connection, index) => {
+    tgStore.state.connections.forEach((connection, index) => {
         const source = getTargetPoint(1, connection.left.key);
         const target = getTargetPoint(2, connection.right.key);
         if (!source || !target) return;
@@ -854,7 +846,7 @@ function drawConnections() {
             .attr('data-connection-index', index)
             .attr('cursor', 'pointer')
             .on('click', function() {
-                selectedConnectionIndex = index;
+                tgStore.select(index);
                 updateConnectionList();
                 syncStyleControlsFromSelection();
                 setStatus(t('selectedConnection', connection.left.name, connection.right.name));
@@ -956,23 +948,17 @@ function renderSingleCanvas() {
 
     const leftMetrics = getSourceSvgMetrics(1);
     const rightMetrics = getSourceSvgMetrics(2);
-    const paddingX = 40;
-    const paddingY = 58;
-    const baseGap = 20;
-    const minYOffset = Math.min(0, layoutState.rightY);
-    const maxYOffset = Math.max(0, layoutState.rightY);
-    const leftTreeX = paddingX;
-    const rightTreeX = paddingX + leftMetrics.width + baseGap + layoutState.rightX;
-    const viewportMinY = minYOffset - 30;
-    const totalWidth = Math.max(
-        paddingX * 2 + leftMetrics.width,
-        rightTreeX + rightMetrics.width + paddingX
-    );
-    const totalHeight = paddingY * 2 + Math.max(leftMetrics.height, rightMetrics.height) + Math.abs(minYOffset) + maxYOffset;
+    const layout = computeTanglegramCombinedLayout({
+        left: leftMetrics,
+        right: rightMetrics,
+        layout: layoutState,
+        padding: { x: 40, y: 58 },
+        baseGap: 20
+    });
 
-    svg.attr('viewBox', `0 ${viewportMinY} ${totalWidth} ${totalHeight}`)
-        .attr('width', totalWidth)
-        .attr('height', totalHeight);
+    svg.attr('viewBox', layout.viewBox)
+        .attr('width', layout.totalWidth)
+        .attr('height', layout.totalHeight);
 
     const viewport = svg.append('g').attr('id', 'tg-viewport-layer');
     viewport.append('g').attr('id', 'tg-title-layer');
@@ -981,29 +967,17 @@ function renderSingleCanvas() {
     viewport.append('g').attr('id', 'tg-endpoint-layer');
     viewport.append('g').attr('id', 'tg-interaction-layer');
 
-    const positions = {
-        1: {
-            x: leftTreeX,
-            y: paddingY
-        },
-        2: {
-            x: rightTreeX,
-            y: paddingY + layoutState.rightY
-        }
-    };
+    const positions = layout.positions;
 
     const titleLayer = d3.select(getCombinedLayer('tg-title-layer'));
     titleLayer.selectAll('*').remove();
 
     [1, 2].forEach((treeNum) => {
         const tree = selectedTrees[treeNum];
-        const metrics = treeNum === 1 ? leftMetrics : rightMetrics;
-        const pos = positions[treeNum];
-        
-        const titleX = treeNum === 1 ? pos.x : pos.x + metrics.width;
-        const titleAnchor = treeNum === 1 ? 'start' : 'end';
-        const titleY = pos.y - 30;
-        const subtitleY = titleY + 16;
+        const titleX = layout.title[treeNum].x;
+        const titleAnchor = layout.title[treeNum].anchor;
+        const titleY = layout.title[treeNum].y;
+        const subtitleY = layout.subtitle[treeNum].y;
 
         titleLayer.append('text')
             .attr('x', titleX)
@@ -1031,11 +1005,7 @@ function renderSingleCanvas() {
 
         const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         wrapper.setAttribute('id', `tg-tree-${treeNum}`);
-        if (treeNum === 2) {
-            wrapper.setAttribute('transform', `translate(${positions[treeNum].x + rightMetrics.width},${positions[treeNum].y}) scale(-1,1)`);
-        } else {
-            wrapper.setAttribute('transform', `translate(${positions[treeNum].x},${positions[treeNum].y})`);
-        }
+        wrapper.setAttribute('transform', layout.transforms[treeNum]);
 
         Array.from(sourceSvg.childNodes).forEach((node) => {
             const cloned = node.cloneNode(true);
@@ -1088,17 +1058,15 @@ function getConnectionBounds(connection) {
 }
 
 function removeConnectionsInBox(box) {
-    const before = connections.length;
-    connections = connections.filter((connection) => {
+    const before = tgStore.state.connections.length;
+    const next = tgStore.state.connections.filter((connection) => {
         const bounds = getConnectionBounds(connection);
         if (!bounds) return false;
         const intersects = !(bounds.maxX < box.minX || bounds.minX > box.maxX || bounds.maxY < box.minY || bounds.minY > box.maxY);
         return !intersects;
     });
-    const removed = before - connections.length;
-    if (selectedConnectionIndex !== null && selectedConnectionIndex >= connections.length) {
-        selectedConnectionIndex = connections.length > 0 ? connections.length - 1 : null;
-    }
+    tgStore.setConnections(next);
+    const removed = before - next.length;
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
@@ -1170,15 +1138,15 @@ function setupBoxDeleteInteraction() {
 function updateConnectionList() {
     const list = document.getElementById('connection-list');
     if (!list) return;
-    if (connections.length === 0) {
+    if (tgStore.state.connections.length === 0) {
         list.innerHTML = `<div class="text-muted small">${escapeHtml(t('noConnections'))}</div>`;
         return;
     }
 
     list.innerHTML = '';
-    connections.forEach((connection, index) => {
+    tgStore.state.connections.forEach((connection, index) => {
         const row = document.createElement('div');
-        row.className = `connection-item d-flex justify-content-between align-items-center border-bottom py-1 gap-2 ${selectedConnectionIndex === index ? 'bg-light' : ''}`;
+        row.className = `connection-item d-flex justify-content-between align-items-center border-bottom py-1 gap-2 ${tgStore.state.selectedConnectionIndex === index ? 'bg-light' : ''}`;
         row.innerHTML = `
             <span class="text-truncate" title="${escapeHtml(connection.left.name)} ↔ ${escapeHtml(connection.right.name)}">
                 ${escapeHtml(connection.left.name)} ↔ ${escapeHtml(connection.right.name)}
@@ -1195,7 +1163,17 @@ function updateConnectionList() {
 }
 
 function connectionExists(leftKey, rightKey) {
-    return connections.some((item) => item.left.key === leftKey && item.right.key === rightKey);
+    return tgStore.connectionExists(leftKey, rightKey);
+}
+
+function toStoreTarget(record) {
+    return {
+        treeNum: record.treeNum,
+        kind: record.kind,
+        key: record.key,
+        name: record.name,
+        nodeId: record.nodeId
+    };
 }
 
 function handleLeafClick(treeNum, record) {
@@ -1215,8 +1193,7 @@ function handleLeafClick(treeNum, record) {
     const right = pendingSelection.treeNum === 2 ? pendingSelection : record;
 
     if (!connectionExists(left.key, right.key)) {
-        connections.push({ left, right, style: { ...defaultConnectionStyle } });
-        selectedConnectionIndex = connections.length - 1;
+        tgStore.addConnection(toStoreTarget(left), toStoreTarget(right));
         updateConnectionList();
         drawConnections();
         syncStyleControlsFromSelection();
@@ -1291,9 +1268,9 @@ async function loadSelectedTrees() {
         return;
     }
 
-    connections = [];
+    tgStore.clear();
     pendingSelection = null;
-    selectedConnectionIndex = null;
+    tgStore.select(null);
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
@@ -1325,29 +1302,66 @@ function getTargetsByName(treeNum) {
     return map;
 }
 
-function autoConnectByName() {
+function getAutoMatchWorker() {
+    if (!autoMatchWorker) {
+        autoMatchWorker = new Worker(new URL('../core/tanglegram/autoMatch.worker.ts', import.meta.url), { type: 'module' });
+    }
+    return autoMatchWorker;
+}
+
+function runAutoMatchInWorker(left, right) {
+    const worker = getAutoMatchWorker();
+    const requestId = `${Date.now()}-${++autoMatchRequestSeq}`;
+    return new Promise((resolve) => {
+        const handler = (event) => {
+            if (!event || !event.data || event.data.id !== requestId) return;
+            worker.removeEventListener('message', handler);
+            resolve(event.data.pairs || []);
+        };
+        worker.addEventListener('message', handler);
+        worker.postMessage({
+            id: requestId,
+            left,
+            right,
+            options: { ignoreParenSuffixForFoldedClade: true }
+        });
+    });
+}
+
+async function autoConnectByName() {
     if (!ensureFramesReady()) {
         alert(t('loadDualFirst'));
         return;
     }
 
-    const leftMap = getTargetsByName(1);
-    const rightMap = getTargetsByName(2);
-    let added = 0;
-
-    leftMap.forEach((leftItems, name) => {
-        const rightItems = rightMap.get(name) || [];
-        const pairCount = Math.min(leftItems.length, rightItems.length);
-        for (let i = 0; i < pairCount; i++) {
-            if (!connectionExists(leftItems[i].key, rightItems[i].key)) {
-                connections.push({ left: leftItems[i], right: rightItems[i], style: { ...defaultConnectionStyle } });
-                added++;
-            }
-        }
+    const leftRecords = getCombinedTargets(1).filter((record) => {
+        if (!record || !isValidTargetName(record.name)) return false;
+        if (!record.explicitName) return false;
+        return record.kind === 'leaf' || record.kind === 'folded-clade';
+    });
+    const rightRecords = getCombinedTargets(2).filter((record) => {
+        if (!record || !isValidTargetName(record.name)) return false;
+        if (!record.explicitName) return false;
+        return record.kind === 'leaf' || record.kind === 'folded-clade';
     });
 
-    if (connections.length > 0 && selectedConnectionIndex === null) {
-        selectedConnectionIndex = 0;
+    const leftLite = leftRecords.map((r) => ({ key: r.key, name: r.name, kind: r.kind }));
+    const rightLite = rightRecords.map((r) => ({ key: r.key, name: r.name, kind: r.kind }));
+
+    const leftByKey = new Map(leftRecords.map((r) => [r.key, toStoreTarget(r)]));
+    const rightByKey = new Map(rightRecords.map((r) => [r.key, toStoreTarget(r)]));
+
+    const pairs = await runAutoMatchInWorker(leftLite, rightLite);
+    let added = 0;
+    pairs.forEach((pair) => {
+        const left = leftByKey.get(pair.leftKey);
+        const right = rightByKey.get(pair.rightKey);
+        if (!left || !right) return;
+        if (tgStore.addConnection(left, right)) added++;
+    });
+
+    if (tgStore.state.connections.length > 0 && tgStore.state.selectedConnectionIndex === null) {
+        tgStore.select(0);
     }
     updateConnectionList();
     drawConnections();
@@ -1711,9 +1725,9 @@ document.getElementById('btn-toggle-pan').addEventListener('click', function() {
 });
 document.getElementById('btn-auto-connect').addEventListener('click', autoConnectByName);
 document.getElementById('btn-clear-connections').addEventListener('click', function() {
-    connections = [];
+    tgStore.clear();
     pendingSelection = null;
-    selectedConnectionIndex = null;
+    tgStore.select(null);
     updateConnectionList();
     drawConnections();
     syncStyleControlsFromSelection();
@@ -1725,16 +1739,15 @@ document.getElementById('btn-export-pdf').addEventListener('click', exportCombin
 document.getElementById('connection-list').addEventListener('click', function(event) {
     const row = event.target.closest('[data-role="connection-row"]');
     if (!row) return;
-    selectedConnectionIndex = Number(row.dataset.idx);
+    tgStore.select(Number(row.dataset.idx));
     updateConnectionList();
     syncStyleControlsFromSelection();
 });
 
 document.getElementById('line-color').addEventListener('input', function() {
     const style = readCurrentStyleInputs();
-    defaultConnectionStyle.color = style.color;
-    if (selectedConnectionIndex !== null && connections[selectedConnectionIndex]) {
-        connections[selectedConnectionIndex].style.color = style.color;
+    tgStore.setDefaultStyle({ color: style.color });
+    if (tgStore.updateSelectedStyle({ color: style.color })) {
         drawConnections();
         updateConnectionList();
     }
@@ -1744,9 +1757,8 @@ document.getElementById('line-color').addEventListener('input', function() {
 
 document.getElementById('line-width').addEventListener('input', function() {
     const style = readCurrentStyleInputs();
-    defaultConnectionStyle.width = style.width;
-    if (selectedConnectionIndex !== null && connections[selectedConnectionIndex]) {
-        connections[selectedConnectionIndex].style.width = style.width;
+    tgStore.setDefaultStyle({ width: style.width });
+    if (tgStore.updateSelectedStyle({ width: style.width })) {
         drawConnections();
         updateConnectionList();
     }
@@ -1756,9 +1768,8 @@ document.getElementById('line-width').addEventListener('input', function() {
 
 document.getElementById('line-opacity').addEventListener('input', function() {
     const style = readCurrentStyleInputs();
-    defaultConnectionStyle.opacity = style.opacity;
-    if (selectedConnectionIndex !== null && connections[selectedConnectionIndex]) {
-        connections[selectedConnectionIndex].style.opacity = style.opacity;
+    tgStore.setDefaultStyle({ opacity: style.opacity });
+    if (tgStore.updateSelectedStyle({ opacity: style.opacity })) {
         drawConnections();
         updateConnectionList();
     }
@@ -1902,13 +1913,13 @@ async function confirmSaveComparison() {
             projectId: selectedTrees[2].projectId,
             treeName: selectedTrees[2].treeName
         },
-        connections: connections.map(c => ({
+        connections: tgStore.state.connections.map(c => ({
             leftKey: c.left.key,
             rightKey: c.right.key,
             style: { ...c.style }
         })),
         layoutState: { ...layoutState },
-        defaultConnectionStyle: { ...defaultConnectionStyle }
+        defaultConnectionStyle: { ...tgStore.state.defaultStyle }
     };
 
     try {
@@ -1984,7 +1995,7 @@ async function initTanglegramFromUrl() {
             syncLayoutInputsFromState();
         }
         if (payload.defaultConnectionStyle) {
-            Object.assign(defaultConnectionStyle, payload.defaultConnectionStyle);
+            tgStore.setDefaultStyle({ ...payload.defaultConnectionStyle });
             syncStyleControlsFromSelection();
         }
 
@@ -1998,17 +2009,18 @@ async function initTanglegramFromUrl() {
                 const rightMap = new Map();
                 getCombinedTargets(2).forEach(r => rightMap.set(r.key, r));
 
-                connections = [];
+                const nextConnections = [];
                 payload.connections.forEach(c => {
                     const left = leftMap.get(c.leftKey);
                     const right = rightMap.get(c.rightKey);
                     if (left && right) {
-                        connections.push({ left, right, style: c.style });
+                        nextConnections.push({ left: toStoreTarget(left), right: toStoreTarget(right), style: c.style });
                     }
                 });
+                tgStore.setConnections(nextConnections);
                 
-                if (connections.length > 0) {
-                    selectedConnectionIndex = 0;
+                if (tgStore.state.connections.length > 0) {
+                    tgStore.select(0);
                 }
                 updateConnectionList();
                 drawConnections();
