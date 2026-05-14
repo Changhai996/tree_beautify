@@ -4,6 +4,7 @@ declare const Vue: any;
 declare const axios: any;
 declare const phylotree: any;
 declare const colorbrewer: any;
+declare const XLSX: any;
 
 interface Window {
   [key: string]: any;
